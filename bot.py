@@ -1007,12 +1007,9 @@ class Bot(discord.Client):
     async def on_ready(self):
         print(f"[bot] logged in as {self.user} id={self.user.id}", flush=True)
         await self._load_owner_name()
+        await self._clear_global_commands()
         for guild in self.guilds:
-            self.tree.copy_global_to(guild=guild)
-            try:
-                await self.tree.sync(guild=guild)
-            except Exception as e:
-                print(f"[bot] sync failed for guild {guild.id}: {type(e).__name__}: {e}", flush=True)
+            await self._sync_guild(guild)
             if self.store.get(guild.id) is None:
                 await self._notify_unconfigured(guild)
         if self.config.status_message:
@@ -1021,8 +1018,30 @@ class Bot(discord.Client):
         if self._refill_task is None:
             self._refill_task = asyncio.create_task(self._refill_loop())
 
+    async def _sync_guild(self, guild) -> None:
+        """Register the slash commands in one guild (instant, unlike global commands)."""
+        self.tree.copy_global_to(guild=guild)
+        try:
+            await self.tree.sync(guild=guild)
+        except Exception as e:
+            print(f"[bot] sync failed for guild {guild.id}: {type(e).__name__}: {e}", flush=True)
+
+    async def _clear_global_commands(self) -> None:
+        """Drop application-wide commands (e.g. llmcord's old /model).
+
+        Commands are registered per guild only; a leftover global command shows up in
+        every new server and fails with CommandNotFound. The local tree is untouched,
+        so copy_global_to() still has our commands to copy.
+        """
+        try:
+            await self.http.bulk_upsert_global_commands(self.application_id, payload=[])
+        except Exception as e:
+            print(f"[bot] clearing global commands failed: {type(e).__name__}: {e}", flush=True)
+
     async def on_guild_join(self, guild):
         self.store.maybe_reload()
+        print(f"[bot] joined guild {guild.id}", flush=True)
+        await self._sync_guild(guild)
         if self.store.get(guild.id) is None:
             await self._notify_unconfigured(guild)
 
