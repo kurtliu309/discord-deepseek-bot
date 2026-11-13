@@ -186,6 +186,7 @@ class Budget:
         self.limit = limit
         self.remaining = limit
         self._empty_notice_sent = False
+        self._used_up_sent = False
 
     @property
     def empty(self) -> bool:
@@ -208,6 +209,13 @@ class Budget:
         self._empty_notice_sent = True
         return True
 
+    def just_used_up(self) -> bool:
+        """True the first time this counter is seen empty, for the owner DM."""
+        if self.remaining > 0 or self._used_up_sent:
+            return False
+        self._used_up_sent = True
+        return True
+
     def set_limit(self, limit: int) -> None:
         """Adopt a config change without handing back replies already spent."""
         self.limit = max(0, int(limit))
@@ -218,6 +226,96 @@ class Budget:
     def refill(self) -> None:
         self.remaining = self.limit
         self._empty_notice_sent = False
+        self._used_up_sent = False
+
+
+class UserLedger:
+    """Per-person spend counts for one guild and one kind of quota (in memory only)."""
+
+    def __init__(self, limit: int = 30):
+        self.limit = limit
+        self._spent: dict = {}
+        self._used_up_sent: set = set()
+        self._blocked_notice_sent: set = set()
+
+    def remaining(self, user_id) -> int:
+        return max(0, self.limit - self._spent.get(str(user_id), 0))
+
+    def spend(self, user_id) -> bool:
+        key = str(user_id)
+        if self.remaining(key) <= 0:
+            return False
+        self._spent[key] = self._spent.get(key, 0) + 1
+        return True
+
+    def refund(self, user_id) -> None:
+        key = str(user_id)
+        spent = self._spent.get(key, 0)
+        if spent > 0:
+            self._spent[key] = spent - 1
+
+    def just_used_up(self, user_id) -> bool:
+        """True the first time this person is seen empty, for the owner DM."""
+        key = str(user_id)
+        if self.remaining(key) > 0 or key in self._used_up_sent:
+            return False
+        self._used_up_sent.add(key)
+        return True
+
+    def notify_blocked(self, user_id) -> bool:
+        """True once per cycle when a blocked request should get the in-channel notice."""
+        key = str(user_id)
+        if self.remaining(key) > 0 or key in self._blocked_notice_sent:
+            return False
+        self._blocked_notice_sent.add(key)
+        return True
+
+    def set_limit(self, limit: int) -> None:
+        """Adopt a config change; spend counts (and notice flags) stay for this cycle."""
+        self.limit = max(0, int(limit))
+
+    def refill(self) -> None:
+        self._spent.clear()
+        self._used_up_sent.clear()
+        self._blocked_notice_sent.clear()
+
+    def refill_user(self, user_id) -> None:
+        key = str(user_id)
+        self._spent.pop(key, None)
+        self._used_up_sent.discard(key)
+        self._blocked_notice_sent.discard(key)
+
+
+class GuildLedger:
+    """One guild's daily counters: guild totals plus per-person counters, replies and lookups."""
+
+    def __init__(
+        self,
+        reply_limit: int = 50,
+        reply_per_user: int = 30,
+        lookup_limit: int = 0,
+        lookup_per_user: int = 20,
+    ):
+        self.replies = Budget(reply_limit)
+        self.replies_by_user = UserLedger(reply_per_user)
+        self.lookups = Budget(lookup_limit)
+        self.lookups_by_user = UserLedger(lookup_per_user)
+
+    def set_limits(self, reply_limit, reply_per_user, lookup_limit, lookup_per_user) -> None:
+        self.replies.set_limit(reply_limit)
+        self.replies_by_user.set_limit(reply_per_user)
+        self.lookups.set_limit(lookup_limit)
+        self.lookups_by_user.set_limit(lookup_per_user)
+
+    def refill(self) -> None:
+        self.replies.refill()
+        self.replies_by_user.refill()
+        self.lookups.refill()
+        self.lookups_by_user.refill()
+
+    def refill_user(self, user_id) -> None:
+        self.replies_by_user.refill_user(user_id)
+        self.lookups_by_user.refill_user(user_id)
 
 
 def parse_hhmm(value):
@@ -236,44 +334,55 @@ def next_reset_at(now: dt.datetime, reset_time) -> dt.datetime:
 
 
 class BudgetBook:
-    """One ``Budget`` per guild, each refilled at that guild's own reset time."""
+    """One ``GuildLedger`` per guild, each refilled at that guild's own reset time."""
 
     def __init__(self, tz, clock=None):
         self.tz = tz
         self.clock = clock or (lambda: dt.datetime.now(self.tz))
-        self._budgets: dict = {}
+        self._ledgers: dict = {}
         self._reset_times: dict = {}
         self._next_reset: dict = {}
 
-    def get(self, guild_key, reset_time, limit) -> Budget:
-        """The guild's budget, created/updated from config and refilled when due."""
+    def ledger(
+        self,
+        guild_key,
+        reset_time,
+        reply_limit,
+        reply_per_user=30,
+        lookup_limit=0,
+        lookup_per_user=20,
+    ) -> GuildLedger:
+        """The guild's counters, created/updated from config and refilled when due."""
         key = str(guild_key)
         reset_time = str(reset_time)
         now = self.clock()
-        budget = self._budgets.get(key)
-        if budget is None:
-            budget = Budget(limit)
-            self._budgets[key] = budget
+        ledger = self._ledgers.get(key)
+        if ledger is None:
+            ledger = GuildLedger(reply_limit, reply_per_user, lookup_limit, lookup_per_user)
+            self._ledgers[key] = ledger
             self._next_reset[key] = next_reset_at(now, reset_time)
         else:
-            if budget.limit != limit:
-                budget.set_limit(limit)
+            ledger.set_limits(reply_limit, reply_per_user, lookup_limit, lookup_per_user)
             if self._reset_times.get(key) != reset_time:
                 self._next_reset[key] = next_reset_at(now, reset_time)
         self._reset_times[key] = reset_time
         if now >= self._next_reset.get(key, now):
-            budget.refill()
+            ledger.refill()
             self._next_reset[key] = next_reset_at(now, reset_time)
-        return budget
+        return ledger
+
+    def get(self, guild_key, reset_time, limit) -> Budget:
+        """The guild's reply counter (kept for callers that only need the total)."""
+        return self.ledger(guild_key, reset_time, limit).replies
 
     def refill_due(self) -> list:
         """Refill every guild whose reset time has passed; returns their keys."""
         now = self.clock()
         refilled = []
-        for key, budget in self._budgets.items():
+        for key, ledger in self._ledgers.items():
             due = self._next_reset.get(key)
             if due is None or now >= due:
-                budget.refill()
+                ledger.refill()
                 self._next_reset[key] = next_reset_at(now, self._reset_times.get(key, "09:00"))
                 refilled.append(key)
         return refilled
@@ -302,6 +411,28 @@ def should_charge(trigger: str, author_id: int, owner_id: int) -> bool:
 def should_charge_dev(author_id: int, owner_id: int) -> bool:
     """/dev posts publicly, so it costs one budget unit for everyone except the owner."""
     return author_id != owner_id
+
+
+def guild_display_name(guild, cfg=None) -> str:
+    name = getattr(guild, "name", None)
+    if not name and cfg is not None:
+        name = cfg.name
+    return name or "this server"
+
+
+def user_display_name(user) -> str:
+    return (
+        getattr(user, "display_name", None)
+        or getattr(user, "name", None)
+        or "someone"
+    )
+
+
+def budget_used_up_message(guild_name, kind, user_name=None, limit=0) -> str:
+    """The owner DM for a quota that just ran out (``kind``: "reply" or "lookup")."""
+    if user_name:
+        return f"{guild_name}: {user_name} used up their daily {kind} limit ({limit}/{limit})."
+    return f"{guild_name}: daily {kind} budget used up ({limit}/{limit})."
 
 
 class ChannelActivity:
@@ -563,18 +694,29 @@ def is_fx_topic(text) -> bool:
     return bool(FX_TOPIC_RE.search(text or ""))
 
 
-def build_rules_card(cfg: GuildConfig, remaining=None, blocked_names=None, tz=None, owner_name="the owner"):
+def build_rules_card(
+    cfg: GuildConfig,
+    remaining=None,
+    blocked_names=None,
+    tz=None,
+    owner_name="the owner",
+    user_remaining=None,
+):
     """Short rules card for ``/rule``; never contains IDs or secrets.
 
     It shows *this guild's* settings: trust, persona/style/language, interjection
-    numbers, budget, quiet channels, scheduled jobs and what it may read.
+    numbers, the guild and per-person reply budgets (only the asker's own remaining),
+    quiet channels, scheduled jobs and what it may read.
     """
     ic = cfg.features.interject
     rc = cfg.features.recap
     tc = cfg.features.topics
     total = cfg.budget.replies_per_day
+    user_total = cfg.budget.replies_per_user
     if remaining is None:
         remaining = total
+    if user_remaining is None:
+        user_remaining = user_total
     if blocked_names is None:
         blocked_names = []
     hh, mm = parse_hhmm(cfg.budget.reset_time)
@@ -623,7 +765,8 @@ def build_rules_card(cfg: GuildConfig, remaining=None, blocked_names=None, tz=No
         f"- setup: {cfg.persona} persona, {cfg.style} style, language {cfg.language}, "
         f"trust {cfg.trust}.",
         reply_line,
-        f"- budget: {remaining}/{total} replies today, refills at {hh:02d}:{mm:02d}{tz_txt}. "
+        f"- budget: {remaining}/{total} replies for the server today, "
+        f"you have {user_remaining}/{user_total}. refills at {hh:02d}:{mm:02d}{tz_txt}. "
         f"{owner_name} can /feed me early.",
         f"- quiet in: {blocked}.",
         f"- jobs: {jobs_line}.",
@@ -787,6 +930,7 @@ class Bot(discord.Client):
         self._refill_task = None
         self._memories: dict = {}
         self._notified_unconfigured: set = set()
+        self._dm_tasks: set = set()
         self.owner_name = "the owner"
         self.about = load_about()
         if not self.about:
@@ -795,8 +939,11 @@ class Bot(discord.Client):
         self.tree = app_commands.CommandTree(self)
         # app_commands needs plain functions (it sets attributes on the callback), not bound methods.
         @self.tree.command(name="feed", description="Refill my daily reply budget here.")
-        async def feed_cmd(interaction: discord.Interaction):
-            await self.feed(interaction)
+        @app_commands.describe(user="Only refill this member's limits, not the whole server")
+        async def feed_cmd(
+            interaction: discord.Interaction, user: Optional[discord.Member] = None
+        ):
+            await self.feed(interaction, user)
 
         @self.tree.command(name="rule", description="How I work, or ask me a question.")
         @app_commands.describe(question="Ask how the bot works")
@@ -976,20 +1123,148 @@ class Bot(discord.Client):
             self._memories[key] = memory
         return memory
 
-    def _budget(self, guild_key, cfg) -> Budget:
-        return self.budgets.get(str(guild_key), cfg.budget.reset_time, cfg.budget.replies_per_day)
+    def _ledger(self, guild_key, cfg) -> GuildLedger:
+        b = cfg.budget
+        return self.budgets.ledger(
+            str(guild_key),
+            b.reset_time,
+            b.replies_per_day,
+            b.replies_per_user,
+            b.lookups_per_day,
+            b.lookups_per_user,
+        )
+
+    @staticmethod
+    def _charge_reply(ledger: GuildLedger, user_id) -> bool:
+        """Spend one reply from both the guild total and this person's own limit."""
+        if ledger.replies.remaining <= 0 or ledger.replies_by_user.remaining(user_id) <= 0:
+            return False
+        ledger.replies.spend()
+        ledger.replies_by_user.spend(user_id)
+        return True
+
+    @staticmethod
+    def _refund_reply(ledger: GuildLedger, user_id) -> None:
+        ledger.replies.refund()
+        ledger.replies_by_user.refund(user_id)
+
+    async def _notify_reply_blocked(self, message, ledger: GuildLedger):
+        """Answer a blocked mention once per guild / per person with the usual notice."""
+        notice = False
+        if ledger.replies.remaining <= 0 and ledger.replies.notify_empty():
+            notice = True
+        user_id = getattr(getattr(message, "author", None), "id", None)
+        if (
+            ledger.replies_by_user.remaining(user_id) <= 0
+            and ledger.replies_by_user.notify_blocked(user_id)
+        ):
+            notice = True
+        if notice:
+            await self._send_out_of_budget(message)
+
+    async def _announce_used_up(self, guild_name, user, ledger: GuildLedger):
+        """DM the owner once when the guild total or this person just hits zero."""
+        if ledger.replies.just_used_up():
+            await self._dm_owner(
+                budget_used_up_message(guild_name, "reply", limit=ledger.replies.limit)
+            )
+        if user is not None and ledger.replies_by_user.just_used_up(user.id):
+            await self._dm_owner(
+                budget_used_up_message(
+                    guild_name,
+                    "reply",
+                    user_name=user_display_name(user),
+                    limit=ledger.replies_by_user.limit,
+                )
+            )
+
+    async def _dm_owner(self, text):
+        try:
+            owner = self.get_user(self.config.owner_id)
+            if owner is None:
+                owner = await self.fetch_user(self.config.owner_id)
+            await owner.send(text)
+        except Exception as e:
+            print(f"[bot] could not DM owner about the budget: {type(e).__name__}: {e}", flush=True)
+
+    def _queue_owner_dm(self, text) -> None:
+        """Queue an owner DM from sync code (``try_charge_lookup``)."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return  # no event loop (unit tests); the ledger still tracks the once-only flag
+        task = loop.create_task(self._dm_owner(text))
+        tasks = getattr(self, "_dm_tasks", None)
+        if tasks is not None:
+            tasks.add(task)
+            task.add_done_callback(tasks.discard)
+
+    def _queue_user_dm(self, guild_name, kind, user_id, limit) -> None:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        task = loop.create_task(self._dm_user_used_up(guild_name, kind, user_id, limit))
+        tasks = getattr(self, "_dm_tasks", None)
+        if tasks is not None:
+            tasks.add(task)
+            task.add_done_callback(tasks.discard)
+
+    async def _dm_user_used_up(self, guild_name, kind, user_id, limit):
+        user = self.get_user(user_id)
+        if user is None:
+            try:
+                user = await self.fetch_user(user_id)
+            except Exception:
+                user = None
+        name = user_display_name(user) if user is not None else "someone"
+        await self._dm_owner(
+            budget_used_up_message(guild_name, kind, user_name=name, limit=limit)
+        )
+
+    def try_charge_lookup(self, guild_id, user_id) -> bool:
+        """Spend one tool lookup from the guild total and the user's own limit.
+
+        v3.1's tool loop calls this before every tool call. Owner lookups are free,
+        like owner replies; a guild without a valid config gets nothing.
+        """
+        if int(user_id) == self.config.owner_id:
+            return True
+        cfg = self.store.get(guild_id)
+        if cfg is None:
+            return False
+        ledger = self._ledger(guild_id, cfg)
+        if ledger.lookups.remaining <= 0 or ledger.lookups_by_user.remaining(user_id) <= 0:
+            return False
+        ledger.lookups.spend()
+        ledger.lookups_by_user.spend(user_id)
+        guild_name = cfg.name or "this server"
+        if ledger.lookups.just_used_up():
+            self._queue_owner_dm(
+                budget_used_up_message(guild_name, "lookup", limit=ledger.lookups.limit)
+            )
+        if ledger.lookups_by_user.just_used_up(user_id):
+            self._queue_user_dm(
+                guild_name, "lookup", user_id, ledger.lookups_by_user.limit
+            )
+        return True
 
     async def reply(self, message, trigger: str, charged: bool, cfg: GuildConfig, guild_key):
-        budget = self._budget(guild_key, cfg)
+        ledger = self._ledger(guild_key, cfg)
         reserved = False
         if charged:
-            if not budget.spend():
+            if not self._charge_reply(ledger, message.author.id):
                 # The "out of juice" notice only answers someone who asked (mention),
                 # never a random / burst jump-in nobody requested.
-                if trigger != "interject" and budget.notify_empty():
-                    await self._send_out_of_budget(message)
+                if trigger != "interject":
+                    await self._notify_reply_blocked(message, ledger)
                 return
             reserved = True
+            await self._announce_used_up(
+                guild_display_name(getattr(message, "guild", None), cfg),
+                getattr(message, "author", None),
+                ledger,
+            )
 
         extra_data, notices = "", []
         if trigger != "interject" and effective(cfg, "read_links"):
@@ -1008,7 +1283,7 @@ class Bot(discord.Client):
             )
         except Exception as e:
             if reserved:
-                budget.refund()
+                self._refund_reply(ledger, message.author.id)
             print(f"[bot] {type(e).__name__}: {e}", flush=True)
             return
 
@@ -1024,7 +1299,7 @@ class Bot(discord.Client):
             raw = await self.ask_model(system, turns, max_tokens=max_tokens)
         except Exception as e:
             if reserved:
-                budget.refund()
+                self._refund_reply(ledger, message.author.id)
             print(f"[bot] {type(e).__name__}: {e}", flush=True)
             return
 
@@ -1032,7 +1307,7 @@ class Bot(discord.Client):
             reply_to = parse_reply_to(raw)
             if reply_to is SKIP:
                 if reserved:
-                    budget.refund()
+                    self._refund_reply(ledger, message.author.id)
                 return
             body = strip_reply_to_line(raw)
             target = resolve_target(context, reply_to, message)
@@ -1045,7 +1320,7 @@ class Bot(discord.Client):
             body = (body + "\n" + "\n".join(notices)).strip() if body else "\n".join(notices)
         if not body:
             if reserved:
-                budget.refund()
+                self._refund_reply(ledger, message.author.id)
             return
 
         chat, filename, docbody = extract_file_block(body, ext)
@@ -1237,8 +1512,10 @@ class Bot(discord.Client):
 
     # -- slash commands ------------------------------------------------------ #
 
-    async def feed(self, interaction: discord.Interaction):
-        """/feed refills only the budget of the guild it was used in."""
+    async def feed(
+        self, interaction: discord.Interaction, user: Optional[discord.Member] = None
+    ):
+        """/feed refills this guild's counters: all of them, or just one member's."""
         if interaction.user.id != self.config.owner_id:
             await interaction.response.send_message("nope", ephemeral=True)
             return
@@ -1247,8 +1524,14 @@ class Bot(discord.Client):
         if cfg is None:
             await interaction.response.send_message(NOT_SET_UP, ephemeral=True)
             return
-        self._budget(key, cfg).refill()
-        await interaction.response.send_message("fed. budget's full again.", ephemeral=True)
+        ledger = self._ledger(key, cfg)
+        if user is None:
+            ledger.refill()
+            text = "fed. budget's full again."
+        else:
+            ledger.refill_user(user.id)
+            text = f"fed. {user_display_name(user)}'s limits are full again."
+        await interaction.response.send_message(text, ephemeral=True)
 
     async def rule(self, interaction: discord.Interaction, question: Optional[str] = None):
         await self._explain(interaction, question, public=False)
@@ -1272,22 +1555,27 @@ class Bot(discord.Client):
             await interaction.response.send_message("not here", ephemeral=True)
             return
 
-        budget = self._budget(key, cfg)
+        ledger = self._ledger(key, cfg)
         charged = public and should_charge_dev(interaction.user.id, self.config.owner_id)
-        if charged and not budget.spend():
-            await interaction.response.send_message(
-                out_of_budget_notice(self.owner_name), ephemeral=True
+        if charged:
+            if not self._charge_reply(ledger, interaction.user.id):
+                await interaction.response.send_message(
+                    out_of_budget_notice(self.owner_name), ephemeral=True
+                )
+                return
+            await self._announce_used_up(
+                guild_display_name(interaction.guild, cfg), interaction.user, ledger
             )
-            return
 
         ephemeral = not public
         blocked_names = self._blocked_names(interaction.guild, cfg.quiet_channels)
         card = build_rules_card(
             cfg,
-            remaining=budget.remaining,
+            remaining=ledger.replies.remaining,
             blocked_names=blocked_names,
             tz=self.config.tz,
             owner_name=self.owner_name,
+            user_remaining=ledger.replies_by_user.remaining(interaction.user.id),
         )
         header = f"**/dev** {question}\n" if public and question else ("**/dev**\n" if public else "")
 
@@ -1306,7 +1594,7 @@ class Bot(discord.Client):
             )
         except Exception as e:
             if charged:
-                budget.refund()
+                self._refund_reply(ledger, interaction.user.id)
             print(f"[bot] {type(e).__name__}: {e}", flush=True)
             await interaction.followup.send("can't answer that right now.", ephemeral=True)
             return

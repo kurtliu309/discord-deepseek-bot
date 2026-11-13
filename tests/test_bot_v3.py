@@ -105,24 +105,33 @@ class TestFeedCommand(unittest.IsolatedAsyncioTestCase):
             maybe_reload=lambda: None,
             get=lambda gid: cfg if str(gid) == "111" else None,
         )
-        a = book.get("111", "09:00", 5)
-        b = book.get("222", "09:00", 5)
-        a.spend()
-        b.spend()
+        a = book.ledger("111", "09:00", 5)
+        b = book.ledger("222", "09:00", 5)
+        a.replies.spend()
+        a.replies_by_user.spend(7)
+        b.replies.spend()
 
         fake = SimpleNamespace(
             config=SimpleNamespace(owner_id=1),
             store=store,
             budgets=book,
-            _budget=lambda key, c: book.get(key, c.budget.reset_time, c.budget.replies_per_day),
+            _ledger=lambda key, c: book.ledger(
+                key,
+                c.budget.reset_time,
+                c.budget.replies_per_day,
+                c.budget.replies_per_user,
+                c.budget.lookups_per_day,
+                c.budget.lookups_per_user,
+            ),
         )
         response = self.Response()
         interaction = SimpleNamespace(
             user=SimpleNamespace(id=1), guild=SimpleNamespace(id=111), response=response
         )
         await bot.Bot.feed(fake, interaction)
-        self.assertEqual(a.remaining, 5)
-        self.assertEqual(b.remaining, 4)
+        self.assertEqual(a.replies.remaining, 5)
+        self.assertEqual(a.replies_by_user.remaining(7), 30)  # everyone refilled too
+        self.assertEqual(b.replies.remaining, 4)
         self.assertEqual(response.sent, ["fed. budget's full again."])
 
     async def test_feed_is_owner_only_and_needs_a_config(self):

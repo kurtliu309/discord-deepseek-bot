@@ -230,8 +230,10 @@ class Features(BaseModel):
 class BudgetSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    replies_per_day: int = Field(50, ge=0)
-    lookups_per_day: int = Field(0, ge=0)  # v3.1 tool lookups; stored, not used yet
+    replies_per_day: int = Field(50, ge=0)  # whole guild
+    replies_per_user: int = Field(30, ge=0)  # each person, on top of the guild total
+    lookups_per_day: int = Field(0, ge=0)  # v3.1 tool lookups
+    lookups_per_user: int = Field(20, ge=0)
     reset_time: HHMM = "09:00"
 
 

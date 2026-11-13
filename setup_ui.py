@@ -40,7 +40,8 @@ TEXT = {
         "trust_public": "公共群（有外人）",
         "trust_owner": "自己的群（全部自己人）",
         "persona_line": "人设：{persona}　风格：{style}　语言：{language}",
-        "budget_line": "额度：每天 {replies} 条回复（查询预算 {lookups} 次，v3.1 用）",
+        "budget_line": "额度：群每天 {replies} 条回复、每人 {replies_per_user} 条"
+        "（查询：群 {lookups} 次、每人 {lookups_per_user} 次，v3.1 用）",
         "interject_line": "插话：{state}，概率 {chance}",
         "quiet_line": "安静频道：{channels}",
         "recap_line": "回顾：{state}　{channel}　{time}",
@@ -79,8 +80,10 @@ TEXT = {
         "modal_interject": "插话设置",
         "modal_recap": "每晚回顾",
         "modal_topics": "每日话题",
-        "field_replies": "每天回复条数",
-        "field_lookups": "每天查询次数（v3.1 预留）",
+        "field_replies": "每天回复条数（群）",
+        "field_replies_per_user": "每人每天回复条数",
+        "field_lookups": "每天查询次数（群，v3.1 预留）",
+        "field_lookups_per_user": "每人每天查询次数（v3.1 预留）",
         "field_switch": "开关（开/关）",
         "field_chance": "概率（百分比，0-100）",
         "field_time": "时间（HH:MM）",
@@ -104,7 +107,8 @@ TEXT = {
         "trust_public": "Public server (outsiders present)",
         "trust_owner": "Own server (everyone is trusted)",
         "persona_line": "Persona: {persona} · Style: {style} · Language: {language}",
-        "budget_line": "Budget: {replies} replies per day (lookup budget {lookups}, used in v3.1)",
+        "budget_line": "Budget: {replies} replies per day for the server, {replies_per_user} "
+        "per person (lookups: {lookups} for the server, {lookups_per_user} per person, used in v3.1)",
         "interject_line": "Interjections: {state}, chance {chance}",
         "quiet_line": "Quiet channels: {channels}",
         "recap_line": "Recap: {state} · {channel} · {time}",
@@ -144,8 +148,10 @@ TEXT = {
         "modal_interject": "Interjections",
         "modal_recap": "Nightly recap",
         "modal_topics": "Daily topics",
-        "field_replies": "Replies per day",
-        "field_lookups": "Lookups per day (reserved for v3.1)",
+        "field_replies": "Replies per day (server)",
+        "field_replies_per_user": "Replies per person per day",
+        "field_lookups": "Lookups per day (server, reserved for v3.1)",
+        "field_lookups_per_user": "Lookups per person per day (reserved for v3.1)",
         "field_switch": "On/off",
         "field_chance": "Chance (percent, 0-100)",
         "field_time": "Time (HH:MM)",
@@ -301,7 +307,9 @@ class SetupForm:
     style: str = "normal"
     language: str = "en"
     replies_per_day: int = 50
+    replies_per_user: int = 30
     lookups_per_day: int = 0
+    lookups_per_user: int = 20
     interject_on: bool = True
     interject_chance: float = 0.03
     quiet_channels: list = field(default_factory=list)
@@ -321,7 +329,9 @@ def form_from_config(cfg: g.GuildConfig) -> SetupForm:
         style=cfg.style,
         language=cfg.language,
         replies_per_day=cfg.budget.replies_per_day,
+        replies_per_user=cfg.budget.replies_per_user,
         lookups_per_day=cfg.budget.lookups_per_day,
+        lookups_per_user=cfg.budget.lookups_per_user,
         interject_on=bool(cfg.features.interject.on),
         interject_chance=float(cfg.features.interject.chance),
         quiet_channels=list(cfg.quiet_channels),
@@ -351,7 +361,9 @@ def apply_form(base: g.GuildConfig, form: SetupForm) -> g.GuildConfig:
     data["quiet_channels"] = [int(c) for c in form.quiet_channels]
 
     data["budget"]["replies_per_day"] = int(form.replies_per_day)
+    data["budget"]["replies_per_user"] = int(form.replies_per_user)
     data["budget"]["lookups_per_day"] = int(form.lookups_per_day)
+    data["budget"]["lookups_per_user"] = int(form.lookups_per_user)
 
     interject = data["features"]["interject"]
     interject["on"] = bool(form.interject_on)
@@ -439,7 +451,9 @@ class SetupView(discord.ui.View):
             t(lang, "guild_name", name=self.guild.name if self.guild is not None else "?"),
             t(lang, "trust_line", label=trust_label(lang, f.trust)),
             t(lang, "persona_line", persona=f.persona, style=f.style, language=f.language),
-            t(lang, "budget_line", replies=f.replies_per_day, lookups=f.lookups_per_day),
+            t(lang, "budget_line", replies=f.replies_per_day,
+              replies_per_user=f.replies_per_user, lookups=f.lookups_per_day,
+              lookups_per_user=f.lookups_per_user),
             t(lang, "interject_line", state=flag(f.interject_on), chance=f"{f.interject_chance:.0%}"),
             t(lang, "quiet_line", channels=self._channel_names(f.quiet_channels)),
             t(lang, "recap_line", state=flag(f.recap_on),
@@ -702,25 +716,42 @@ class BudgetModal(_FormModal):
         self.replies = discord.ui.TextInput(
             label=t(lang, "field_replies"), default=str(f.replies_per_day), max_length=5
         )
+        self.replies_per_user = discord.ui.TextInput(
+            label=t(lang, "field_replies_per_user"),
+            default=str(f.replies_per_user), required=False, max_length=5,
+        )
         self.lookups = discord.ui.TextInput(
             label=t(lang, "field_lookups"), default=str(f.lookups_per_day),
             required=False, max_length=5,
         )
+        self.lookups_per_user = discord.ui.TextInput(
+            label=t(lang, "field_lookups_per_user"),
+            default=str(f.lookups_per_user), required=False, max_length=5,
+        )
         self.add_item(self.replies)
+        self.add_item(self.replies_per_user)
         self.add_item(self.lookups)
+        self.add_item(self.lookups_per_user)
 
     async def on_submit(self, interaction):
         lang = self.view.setup_language
+        f = self.view.form
         try:
             replies = int(str(self.replies.value).strip())
+            replies_per_user = int(str(self.replies_per_user.value).strip() or f.replies_per_user)
             lookups = int(str(self.lookups.value).strip() or 0)
-            if replies < 0 or lookups < 0:
+            lookups_per_user = int(
+                str(self.lookups_per_user.value).strip() or f.lookups_per_user
+            )
+            if min(replies, replies_per_user, lookups, lookups_per_user) < 0:
                 raise ValueError
         except ValueError:
             await self._fail(interaction, t(lang, "err_budget"))
             return
-        self.view.form.replies_per_day = replies
-        self.view.form.lookups_per_day = lookups
+        f.replies_per_day = replies
+        f.replies_per_user = replies_per_user
+        f.lookups_per_day = lookups
+        f.lookups_per_user = lookups_per_user
         await self.view._show(interaction)
 
 
