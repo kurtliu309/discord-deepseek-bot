@@ -1,34 +1,41 @@
 ---
 name: chatbot-ops
-description: 运维本机 Docker Desktop 上的 Discord DeepSeek 聊天机器人（llmcord 容器）：查状态、看日志、启停重启、改模型/系统提示词/允许的用户或频道、升级 llmcord 版本并重建。在这台 Windows 电脑上对这个 bot 做任何操作之前先加载。
+description: 运维本机 Docker Desktop 上的 Discord DeepSeek 聊天机器人（llmcord 容器 + Squid egress 白名单代理）：查状态、看日志、启停重启、改模型/人设/允许的用户或频道、增删出网白名单、升级 llmcord 版本并重建。在这台 Windows 电脑上对这个 bot 做任何操作之前先加载。
 ---
 
 # chatbot-ops
 
-这个 bot 是一个跑在 Docker Desktop 里的 llmcord 容器（compose 服务名 `bot`，容器名 `discord-deepseek-bot`）。
-你（Claude Code）在**容器外面**用 `docker compose` 管理它；容器里的 bot 碰不到你，也碰不到这台电脑。
+这个 bot 由两个容器组成，都在 Docker Desktop 里：
+
+| compose 服务 | 容器名 | 作用 |
+|---|---|---|
+| `bot` | `discord-deepseek-bot` | llmcord 本体。只接在 `botnet`（`internal: true`，没有出网路由） |
+| `egress` | `discord-deepseek-bot-egress` | Squid 白名单代理。接 `botnet` + `egress_net`，只放行 `egress/allowlist.txt` 里的域名、只允许 CONNECT 443、拒绝所有私网 IP |
+
+你（Claude Code）在**容器外面**用 `docker compose` 管理它们；容器里的 bot 碰不到你，也碰不到这台电脑。
 
 - 所有命令都是 PowerShell，并且**在项目文件夹里执行**（含 `docker-compose.yml` 的那个文件夹）。先 `Set-Location <项目文件夹>`。
-- 下文路径都相对项目文件夹：`.env`、`Dockerfile`、`docker-compose.yml`、`config.template.yaml`、`entrypoint.py`。
-- 执行前确认 Docker Desktop 在跑：`docker version --format '{{.Server.Version}}'`。报错就让 Kurt 打开 Docker Desktop，不要自己改 Docker 设置。
+- 项目文件夹是 `D:\Kurt\cc_sandbox\discord-deepseek-bot`。下文路径都相对它：`.env`、`Dockerfile`、`docker-compose.yml`、`config.template.yaml`、`entrypoint.py`、`prompts\default.txt`、`egress\allowlist.txt`、`egress\squid.conf`。
+- 执行前确认 Docker Desktop 在跑：`docker version --format '{{.Server.Version}}'`。报错就让 Kurt 打开 Docker Desktop，不要自己改 Docker 设置。Engine 版本必须 ≥ 28（`botnet` 的 `gateway_mode_ipv4: isolated` 需要它；没有它 bot 能经网关 IP 碰到主机端口）。部署后用 `docker network inspect discord-deepseek-bot_botnet --format '{{json .IPAM.Config}}'` 确认里面**没有** `Gateway`。
 
 ## 硬规则（违反任何一条都不要做，先问 Kurt）
 
-1. **不加** `volumes`、bind mount、`ports`、`privileged`、`cap_add`、`network_mode: host`、`pid: host`、`ipc: host`、`devices`，**不挂** `/var/run/docker.sock` 或 `//./pipe/docker_engine`。不删 `read_only`、`cap_drop`、`no-new-privileges`、`user`、资源限制。
-2. **不打印密钥**。不要 `Get-Content .env`、`type .env`、`cat .env`，不要跑不带 `--quiet` 的 `docker compose config`，不要跑不带 `--format` 的 `docker inspect`，也不要 `docker exec ... env`。这些都会把 `DISCORD_BOT_TOKEN` / `DEEPSEEK_API_KEY` 打到输出里。
-3. **不改密钥行**（`DISCORD_BOT_TOKEN`、`DISCORD_CLIENT_ID`、`DEEPSEEK_API_KEY`）。需要换密钥时请 Kurt 自己用记事本改 `.env`。
-4. **第一阶段只聊天**：不给模型加 `tools` / `tool_choice` / function calling / MCP / 代码执行，不加别的 provider。`entrypoint.py` 里有检查，不要删掉它。
-5. 不 `git push`，不把 `.env` 加进 git。
-6. 不用 `ALLOW_PUBLIC=true`，除非 Kurt 明确要求开放给所有人。
+1. **bot 只接 `botnet`**：不给 `bot` 服务加任何别的网络（不加 `egress_net`、`default`、`bridge`、`host`），不删 `botnet` 的 `internal: true` 和 `gateway_mode_ipv4: isolated`，不删 `HTTPS_PROXY`。bot 出网只能经过 egress。
+2. **不加** `volumes`、bind mount、`ports`、`privileged`、`cap_add`、`network_mode: host`、`pid: host`、`ipc: host`、`devices`，**不挂** `/var/run/docker.sock` 或 `//./pipe/docker_engine`。不删 `read_only`、`cap_drop`、`no-new-privileges`、`user`、资源限制。
+3. **不打印密钥**。不要 `Get-Content .env`、`type .env`、`cat .env`，不要跑不带 `--quiet` 的 `docker compose config`，不要跑不带 `--format` 的 `docker inspect`，也不要 `docker exec ... env`。这些都会把 `DISCORD_BOT_TOKEN` / `DEEPSEEK_API_KEY` 打到输出里。
+4. **不改密钥行**（`DISCORD_BOT_TOKEN`、`DISCORD_CLIENT_ID`、`DEEPSEEK_API_KEY`）。需要换密钥时请 Kurt 自己用记事本改 `.env`。
+5. **第一阶段只聊天**：不给模型加 `tools` / `tool_choice` / function calling / MCP / 代码执行，不加别的 provider。`entrypoint.py` 里有检查，不要删掉它。
+6. 不把 `.env` 加进 git，不在任何提交、日志或聊天里写出密钥。
+7. 不用 `ALLOW_PUBLIC=true`，除非 Kurt 明确要求开放给所有人。
 
 ## 查状态
 
 ```powershell
 docker compose ps
-docker stats --no-stream discord-deepseek-bot
+docker stats --no-stream discord-deepseek-bot discord-deepseek-bot-egress
 ```
 
-`STATUS` 应该是 `Up ...`。如果是 `Restarting`，看日志找 `[entrypoint] config error`。
+两个容器的 `STATUS` 都应该是 `Up ...`。如果是 `Restarting`，看日志找 `[entrypoint] config error`。
 
 只看 `.env` 里有哪些键、非密钥的值是什么（密钥只显示 set/empty）：
 
@@ -47,7 +54,10 @@ Get-Content .env | ForEach-Object {
 ```powershell
 docker compose logs --tail 100 bot
 docker compose logs --tail 50 -f bot      # 跟随，Ctrl+C 退出
+docker compose logs --tail 50 egress      # 代理的放行 / 拒绝记录
 ```
+
+egress 日志每行一个请求：`TCP_TUNNEL/200 ... CONNECT discord.com:443` 是放行，`TCP_DENIED/403` 是被白名单或私网规则拒绝，`TCP_TUNNEL/503` 是放行了但上游连不上。
 
 正常启动会看到 `[entrypoint] config.yaml rendered: model=... allowed_users=N ...`，然后 `logging in using static token`、`Shard ID None has connected to Gateway`。
 日志里会出现 llmcord 打印的 `BOT INVITE URL`（权限值 412317191168），忽略它，用 README 里的最小权限邀请链接。
@@ -62,6 +72,35 @@ docker compose start          # 停止后再启动
 docker compose restart bot    # 重启进程；注意：不会重新读取 .env
 docker compose down           # 删除容器和网络（镜像保留）
 ```
+
+## 改人设
+
+人设默认在 `prompts\default.txt`（打进镜像，只读）。改它：
+
+1. 用编辑器改 `prompts\default.txt`（UTF-8）。保留最后的底线段落（不针对种族 / 宗教 / 性别等群体的仇恨用语、不人肉、不威胁真人），否则服务器可能被 Discord 封。`{date}` `{time}` 会被替换成当前日期时间。
+2. 重建 bot：
+   ```powershell
+   docker compose up -d --build bot
+   docker compose logs --tail 20 bot
+   ```
+
+临时覆盖：在 `.env` 里设 `SYSTEM_PROMPT`（见下一节），它优先于 `prompts\default.txt`；改回空值就恢复默认。
+
+## 增删出网白名单
+
+白名单是 `egress\allowlist.txt`，打进 egress 镜像（不挂载）。一行一个域名；前面加点（`.discord.gg`）表示含所有子域名。
+
+1. 改之前先问 Kurt，并说明这个域名为什么需要。第一阶段只应该有 Discord（`discord.com`、`.discord.gg`、`cdn.discordapp.com`）和 `api.deepseek.com`。不要加通配的大域名（如 `.com`、`.amazonaws.com`、`.cloudflare.com`）。
+2. 编辑 `egress\allowlist.txt`。
+3. 重建并重启 egress（bot 不用动）：
+   ```powershell
+   docker compose up -d --build egress
+   docker compose logs --tail 20 egress
+   ```
+   build 时会跑 `squid -k parse`，配置写错会直接失败。
+4. 看 egress 日志确认新域名是 `TCP_TUNNEL/200`、其他域名仍是 `TCP_DENIED/403`。
+
+不要改 `egress\squid.conf` 里的私网 IP 拒绝规则和 `CONNECT 443 only` 规则。
 
 ## 改模型 / 系统提示词 / 允许的用户或频道
 
@@ -83,7 +122,7 @@ function Set-EnvKey([string]$Key, [string]$Value) {
 Set-EnvKey DEEPSEEK_MODEL 'deepseek-flash'
 Set-EnvKey ALLOWED_USER_IDS '111111111111111111,222222222222222222'
 Set-EnvKey ALLOWED_CHANNEL_IDS '333333333333333333'
-Set-EnvKey SYSTEM_PROMPT '"你是一个简洁的助手。\n今天是 {date}。"'
+Set-EnvKey SYSTEM_PROMPT '"You are a grumpy pirate.\nToday is {date}."'
 docker compose up -d
 docker compose logs --tail 20 bot
 ```
@@ -93,11 +132,11 @@ docker compose logs --tail 20 bot
 | 键 | 说明 |
 |---|---|
 | `DEEPSEEK_MODEL` | DeepSeek 模型 ID，默认 `deepseek-flash`。改之前查 https://api-docs.deepseek.com/quick_start/pricing 确认 ID 存在 |
-| `SYSTEM_PROMPT` | 一行；多行用双引号包起来并写 `\n`。支持 `{date}` `{time}`。留空用默认中文提示词 |
+| `SYSTEM_PROMPT` | 一行；换行写 `\n`（加不加双引号都行，entrypoint 会把字面 `\n` 转成换行）。支持 `{date}` `{time}`。留空用 `prompts\default.txt` |
 | `ALLOWED_USER_IDS` | 逗号分隔的用户 ID。空 = 不按用户限制 |
 | `ALLOWED_CHANNEL_IDS` | 逗号分隔的频道 / 分类 ID（子线程按父频道算）。空 = 不按频道限制。不影响私信 |
-| `ADMIN_USER_IDS` | 管理员：可用 `/model`，总能通过用户检查，`ALLOW_DMS=false` 时也能私信 |
-| `ALLOW_DMS` | 默认 `false`。设 `true` 时必须同时设 `ALLOWED_USER_IDS` |
+| `ADMIN_USER_IDS` | 保持为空。为空时没人能用 `/model` 切模型 |
+| `ALLOW_DMS` | 默认 `true`（白名单用户可私信）。为 `true` 时必须设 `ALLOWED_USER_IDS` |
 
 两个 `ALLOWED_*` 都空时容器拒绝启动（llmcord 的语义是"空 = 所有人"，这里改成默认拒绝）。
 
@@ -130,6 +169,7 @@ llmcord 固定在 `Dockerfile` 的两个 ARG：`LLMCORD_COMMIT`（commit SHA）�
 
 - `Restarting` 循环：`docker compose logs --tail 30 bot` 找 `[entrypoint] config error`，按提示改 `.env`。
 - 登录失败 `Improper token`：token 错了，请 Kurt 去 Developer Portal 重置 token 并自己改 `.env`。
+- 日志里 `ClientHttpProxyError: 403`：egress 拒绝了某个域名，看 `docker compose logs --tail 50 egress` 里被拒的是哪个，按"增删出网白名单"处理（先问 Kurt）。
 - 能上线但不回复：确认在频道里 @ 了 bot；确认发消息的人 / 频道在允许列表里；确认 Developer Portal 开了 Message Content Intent。
-- 回复是空白的：把 `USE_PLAIN_RESPONSES` 设为 `true`，或请 Kurt 给 bot 加 Embed Links 权限。
+- 回复是空白的：确认 bot 有 Embed Links 权限（邀请链接 permissions=84992 已包含），或把 `USE_PLAIN_RESPONSES` 设为 `true`。
 - DeepSeek 报 401 / 402：key 无效或余额不足，告诉 Kurt，不要自己改 key。
