@@ -690,6 +690,14 @@ class SetupView(discord.ui.View):
         channel = self.guild.get_channel(int(channel_id)) if self.guild is not None else None
         return f"#{channel.name}" if channel is not None else t(lang, "gone")
 
+    @staticmethod
+    def _default_channels(ids):
+        """Preselected channels for a ChannelSelect, so a redraw keeps what was picked."""
+        return [
+            discord.SelectDefaultValue(id=int(c), type=discord.SelectDefaultValueType.channel)
+            for c in dict.fromkeys(ids or []) if c is not None
+        ][:25]
+
     def _channel_names(self, ids) -> str:
         lang = self.setup_language
         if not ids:
@@ -908,6 +916,7 @@ class SetupView(discord.ui.View):
             max_values=25,
             channel_types=[discord.ChannelType.text, discord.ChannelType.voice,
                            discord.ChannelType.category],
+            default_values=self._default_channels(f.quiet_channels),
         )
         quiet.callback = self._on_quiet
         self.add_item(quiet)
@@ -918,6 +927,7 @@ class SetupView(discord.ui.View):
             min_values=0,
             max_values=1,
             channel_types=[discord.ChannelType.text],
+            default_values=self._default_channels([f.recap_channel]),
         )
         recap.callback = self._on_recap_channel
         self.add_item(recap)
@@ -928,6 +938,7 @@ class SetupView(discord.ui.View):
             min_values=0,
             max_values=1,
             channel_types=[discord.ChannelType.text],
+            default_values=self._default_channels([f.topics_channel]),
         )
         topics.callback = self._on_topics_channel
         self.add_item(topics)

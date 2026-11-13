@@ -468,3 +468,32 @@ class TestUserSelectWithoutMemberCache(unittest.IsolatedAsyncioTestCase):
                           if isinstance(i, discord.ui.UserSelect) and i.row == 1)
             self.assertEqual([d.id for d in admins.default_values], [444])
             self.assertIn("<@444>", view.render())
+
+
+class TestChannelSelectsKeepPicks(unittest.IsolatedAsyncioTestCase):
+    async def test_quiet_recap_topics_stay_selected_after_redraw(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, view = make_view(tmp)
+            interaction, _ = fake_interaction()
+            view.page = 2
+            interaction.data = {"values": ["501", "502"]}
+            await view._on_quiet(interaction)
+            interaction.data = {"values": ["601"]}
+            await view._on_recap_channel(interaction)
+            interaction.data = {"values": ["701"]}
+            await view._on_topics_channel(interaction)
+            view.page = 2
+            view._build()
+            selects = {i.row: i for i in view.children if isinstance(i, discord.ui.ChannelSelect)}
+            self.assertEqual([d.id for d in selects[0].default_values], [501, 502])
+            self.assertEqual([d.id for d in selects[1].default_values], [601])
+            self.assertEqual([d.id for d in selects[2].default_values], [701])
+
+    def test_empty_channels_give_no_defaults(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, view = make_view(tmp)
+            view.page = 2
+            view._build()
+            selects = [i for i in view.children if isinstance(i, discord.ui.ChannelSelect)]
+            for s in selects:
+                self.assertEqual(list(s.default_values), [])
