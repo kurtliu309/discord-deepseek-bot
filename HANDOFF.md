@@ -36,8 +36,9 @@ updated: 2026-11-13
 - [x] hub 已登记（`D:\Kurt\hub\projects\INDEX.md`，hub 仓库同名分支，还没合进 main）。
 - [x] Kurt 已在 Developer Portal 建好 bot、关掉 Public Bot（Install Link 设为 None）、打开 Message Content Intent，bot 已进服务器（离线）。
 - [x] Kurt 已打开 Discord 开发者模式。
-- [ ] DeepSeek key、user ID / channel ID：Kurt 自己准备。
-- [ ] Docker Desktop 安装、部署、自检、实测。
+- [x] DeepSeek key、user ID / channel ID：Kurt 已填进 `.env`。
+- [x] Docker Desktop 安装、部署、隔离自检（2026-11-13，见 [docs/notes/windows-deploy.md](docs/notes/windows-deploy.md)）。
+- [ ] Discord 实测：频道 @bot、私信、非白名单用户无响应。
 
 ## 下一步（按顺序）
 
