@@ -40,7 +40,8 @@ updated: 2026-11-13
 - [x] Docker Desktop 安装、部署、隔离自检（2026-11-13，见 [docs/notes/windows-deploy.md](docs/notes/windows-deploy.md)）。
 - [ ] Discord 实测：频道 @bot、私信、非白名单用户无响应。
 - [x] v2（自写 bot）代码完成：`bot.py` / `fetcher.py` / `scheduler.py` 写好，隔离在 Docker 里测过，scheduler 的 `--once recap|topics --dry-run` 跑通（见 [docs/notes/design-v2.md](docs/notes/design-v2.md)）。
-- [ ] v2 待办：Discord 实测（@、插话、附件 / 网址、`/rule`、`/feed`）；Reddit 403 怎么办要定（暂时等官方 API）；实测通过后启动 scheduler；写一份双语 HTML 说明；以后再发布到 GitHub。
+- [x] 2026-11-13：scheduler 已启动（22:00 总结、08:00/08:30 预抓、09:00 话题）；Reddit 改走公开 RSS（两组合并订阅）；仓库已公开（MIT，默认分支 `main`）；双语说明页已发布为 claude.ai Artifact（私有，Kurt 用 Share 分享）。
+- [ ] v2 待办：Discord 实测（@、插话、附件 / 网址、写 md、`/rule`、`/feed`、`#general` 不回、私信只回 Kurt）；第一次 09:00 时确认 Reddit 第二组没被限流。
 
 ## 下一步（按顺序）
 
