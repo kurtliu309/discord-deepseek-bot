@@ -16,6 +16,8 @@ what's new, answer from this list.
     "More settings", "Members" and "Back" buttons are gone).
   - Daily news can now be set in `/setup`: the "Topics settings" form also holds the news
     switch, time and number of stories. News posts in the same channel as the topics.
+  - Fix: people picked in the admins / blocked lists now stay ticked and show their
+    names (before, the list looked empty again after every pick).
 - **v3.2 · 2026-11-14**
   - New `news` feature: every day at the server's own time it posts the day's news in a
     channel: one opening line in character, then one short message per story (title, a

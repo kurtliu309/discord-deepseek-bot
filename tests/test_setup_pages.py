@@ -430,3 +430,41 @@ class TestNewsConfig(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestUserSelectWithoutMemberCache(unittest.IsolatedAsyncioTestCase):
+    """No members intent: get_member() is None, picks must still stick and show names."""
+
+    async def test_picked_admins_stay_ticked_and_named(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, view = make_view(tmp)
+            interaction, response = fake_interaction()
+            interaction.data = {
+                "values": ["222", "333"],
+                "resolved": {
+                    "users": {"222": {"username": "gf", "global_name": "Girlfriend"},
+                              "333": {"username": "pal"}},
+                    "members": {"333": {"nick": "Pal Nick"}},
+                },
+            }
+            view.page = 3
+            await view._on_admins(interaction)
+            self.assertEqual(view.form.admins, [222, 333])
+            text = view.render()
+            self.assertIn("Girlfriend", text)
+            self.assertIn("Pal Nick", text)
+            view.page = 3
+            view._build()
+            admins = next(i for i in view.children
+                          if isinstance(i, discord.ui.UserSelect) and i.row == 1)
+            self.assertEqual([d.id for d in admins.default_values], [222, 333])
+
+    def test_saved_admins_are_preselected_by_id_when_not_cached(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, view = make_view(tmp, admins=[444])
+            view.page = 3
+            view._build()
+            admins = next(i for i in view.children
+                          if isinstance(i, discord.ui.UserSelect) and i.row == 1)
+            self.assertEqual([d.id for d in admins.default_values], [444])
+            self.assertIn("<@444>", view.render())

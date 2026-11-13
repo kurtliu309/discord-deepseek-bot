@@ -705,11 +705,32 @@ class SetupView(discord.ui.View):
         except Exception:
             return None
 
+    def _remember_users(self, interaction) -> None:
+        """Keep the names Discord sends with a user-select pick.
+
+        The bot has no members intent, so ``guild.get_member`` is usually empty; the
+        select's ``resolved`` block is where the picked people's names actually are.
+        """
+        data = getattr(interaction, "data", None) or {}
+        resolved = data.get("resolved") or {}
+        users = resolved.get("users") or {}
+        members = resolved.get("members") or {}
+        names = getattr(self, "_names", None)
+        if names is None:
+            names = self._names = {}
+        for uid, user in users.items():
+            member = members.get(uid) or {}
+            name = member.get("nick") or user.get("global_name") or user.get("username")
+            if name:
+                names[int(uid)] = str(name)
+
     def _user_name(self, user_id) -> str:
         member = self._member(user_id)
-        if member is None:
-            return t(self.setup_language, "unknown_user")
-        return display_name(member)
+        if member is not None:
+            return display_name(member)
+        name = (getattr(self, "_names", None) or {}).get(int(user_id))
+        # A mention renders as the person's name in Discord without needing the cache.
+        return name or f"<@{int(user_id)}>"
 
     def _user_names(self, ids) -> str:
         lang = self.setup_language
@@ -719,13 +740,19 @@ class SetupView(discord.ui.View):
         return t(lang, "join").join(self._user_name(uid) for uid in ids)
 
     def _default_members(self, ids):
-        """Members for a UserSelect's defaults; unknown/left users simply drop out.
+        """Preselected users for a UserSelect, by ID.
 
-        Only real guild members are preselected: the select cannot show someone who
-        left the server (their name still appears in the text summary above).
+        The bot has no members intent, so the member cache is usually empty; passing
+        bare IDs lets Discord itself show who is ticked (it resolves the names).
         """
-        members = [self._member(uid) for uid in g.without_owner(ids, self.owner_id)]
-        return [m for m in members if isinstance(m, (discord.User, discord.Member))][:25]
+        out = []
+        for uid in g.without_owner(ids, self.owner_id):
+            member = self._member(uid)
+            out.append(
+                member if isinstance(member, (discord.User, discord.Member))
+                else discord.Object(id=int(uid), type=discord.User)
+            )
+        return out[:25]
 
     def render(self) -> str:
         f = self.form
@@ -1004,6 +1031,7 @@ class SetupView(discord.ui.View):
         await self._show(interaction)
 
     async def _on_blocked(self, interaction):
+        self._remember_users(interaction)
         self.form.blocked_users = [int(v) for v in interaction.data.get("values", [])]
         await self._show(interaction)
 
@@ -1011,6 +1039,7 @@ class SetupView(discord.ui.View):
         if not self.is_owner:
             await self._show(interaction)  # disabled in the UI; ignore a forced callback
             return
+        self._remember_users(interaction)
         self.form.admins = [int(v) for v in interaction.data.get("values", [])]
         await self._show(interaction)
 
