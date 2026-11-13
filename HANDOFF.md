@@ -41,7 +41,8 @@ updated: 2026-11-14
 ## 下一步（按顺序）
 
 1. ~~等 Kurt 在 `#bot-test` 验收 v3.0~~ **已验收（2026-11-14）**。语言行为维持原样（默认按设置，有人用别的语言就跟着回），Kurt 确认没问题。原验收清单：@ 聊天（TiredFX 口吻、会用群档案）、`/setup` 改一项立即生效、中英切换、`/feed` / `/feed @人`、`/rule`、黑名单、管理员（女朋友账号）、改设置收到私信、把每人上限临时改 2 测“没电”和私信。另建一个空服务器用邀请链接拉测试 bot，走一遍“未配置 → 私信 → /setup”。测试 bot 邀请链接：`https://discord.com/oauth2/authorize?client_id=1570772366794166322&permissions=2147568640&scope=bot%20applications.commands`
-2. **v3.1 接工具**（线 B 已在 `tools/`、`searxng/`、`docker-compose.tools.yml`、`egress/squid.tools.snippet.conf`，29 个单测过，三个工具实测通）：
+2. **v3.1 接工具：代码已合（提交 7410ba3 + bing 修复），测试栈已上线（tools/searxng-staging 在跑，头脑警察 staging 配置 `tools.on: true`），三个工具从 bot 容器实测通，等 Kurt 在 `#bot-test` 验收。** 坑：SearXNG 默认 `bing disabled: true`，`keep_only` 不会打开它，要在 `engines:` 里显式 `disabled: false`；brave 常被限流。以下为原计划（
+线 B 已在 `tools/`、`searxng/`、`docker-compose.tools.yml`、`egress/squid.tools.snippet.conf`，29 个单测过，三个工具实测通）：
    - 合并：tools（172.30.0.21）、searxng（.22）进 compose（正式和 staging 各一份 IP），squid 片段并进 `squid.conf` / `squid.staging.conf`，SearXNG `secret_key` 部署时生成、不提交；不开 DuckDuckGo（验证码）。
    - bot 侧：`mcp>=1.30,<2` 客户端连 `http://<tools IP>:8090/mcp`；DeepSeek function calling 循环插在 `Bot.reply` 调模型之前；`effective(cfg,"tools")` 才带工具；给模型的工具 schema 里**不出现** `guild_id`/`allow_domains`（由 bot 注入）；每次调用 `try_charge_lookup()`；≤4 次、抓回合计 ≤4 万字符；public 群不带工具。
    - 派 Flash（**只用 Flash，见 delegate-coding 2.2.0**），任务拆小。

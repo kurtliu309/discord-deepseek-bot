@@ -19,6 +19,12 @@ use_default_settings:
       - wikipedia
       - github
 
+# bing ships `disabled: true` in SearXNG's defaults; keep_only does not switch it on, so a
+# plain query only reached brave (often rate-limited). Turn it on explicitly.
+engines:
+  - name: bing
+    disabled: false
+
 general:
   instance_name: "ddb-search"
   # No statistics, no donation link: this instance is not for people.
