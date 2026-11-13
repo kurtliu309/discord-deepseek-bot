@@ -11,9 +11,9 @@
 use_default_settings:
   engines:
     # Only general-purpose engines; everything else in the default set is switched off.
-    # Enabled: duckduckgo, bing, brave, wikipedia, github.
+    # Enabled: bing, brave, wikipedia, github.
+    # duckduckgo is deliberately NOT kept: it answers with CAPTCHAs from datacenter IPs.
     keep_only:
-      - duckduckgo
       - bing
       - brave
       - wikipedia
@@ -38,8 +38,10 @@ search:
     - json
 
 server:
-  # Placeholder: searched-for value is generated when deploying, see tools/README.md.
-  # Never commit a real key — it signs this instance's session cookie.
+  # Placeholder only — the real key is never committed. docker-compose.yml gives the
+  # searxng service `env_file: searxng.env`, and SearXNG's settings loader replaces this
+  # value with the SEARXNG_SECRET environment variable (searx/settings_defaults.py:
+  # `'secret_key': SettingsValue(str, environ_name='SEARXNG_SECRET')`).
   secret_key: "REPLACE_ME_AT_DEPLOY"
   # Not a public instance, no rate limiter (that needs a valkey/redis container).
   limiter: false
@@ -58,7 +60,7 @@ outgoing:
   max_request_timeout: 10.0
   useragent_suffix: ""
   # Every outbound request goes through the egress proxy. Rules per source address live in
-  # egress/squid.conf; 172.30.0.22 is in egress/squid.tools.snippet.conf.
+  # egress/squid.conf; 172.30.0.22 (172.31.0.22 in staging) is in the `tools_client` ACL.
   proxies:
     all://:
       - http://egress:3128

@@ -7,6 +7,8 @@ tzdata==2025.2
 # v3: per-guild config.yaml (validation + YAML)
 pydantic==2.11.7
 PyYAML==6.0.2
+# v3.1: MCP client for the owner-guild tools (1.x; 2.x renames FastMCP -> MCPServer)
+mcp>=1.30,<2
 # fetcher.py only: file parsers and RSS (run in the keyless fetcher container)
 pypdf==5.4.0
 python-docx==1.1.2

@@ -1,5 +1,5 @@
 # One image for bot.py (Discord bot), scheduler.py (daily jobs) and fetcher.py (keyless
-# web/file fetcher). docker-compose.yml picks the program per service. Chat only: no tools.
+# web/file fetcher). docker-compose.yml picks the program per service.
 FROM python:3.13-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -18,7 +18,7 @@ RUN pip install -r requirements.txt
 
 COPY bot.py scheduler.py fetcher.py ./
 # v3 modules: per-guild config, persona library, per-guild memory, /setup UI, v2 -> v3 migration.
-COPY guildcfg.py persona.py guildmem.py setup_ui.py migrate_v3.py ./
+COPY guildcfg.py persona.py guildmem.py setup_ui.py migrate_v3.py toolloop.py ./
 COPY prompts/ ./prompts/
 
 # App code is root-owned and read-only for the runtime user. At runtime the root fs is

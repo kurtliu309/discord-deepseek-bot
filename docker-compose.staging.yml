@@ -6,11 +6,13 @@
 #
 # Kept apart on purpose (nothing here may collide with production):
 #   - project/network names: ddb-staging_*            (production: discord-deepseek-bot_*)
-#   - subnet 172.31.0.0/24: egress .2, bot .10, scheduler .11, fetcher .20
+#   - subnet 172.31.0.0/24: egress .2, bot .10, scheduler .11, fetcher .20, tools .21,
+#     searxng .22
 #     (production uses 172.30.0.0/24; egress/squid.staging.conf applies the same rules
 #      to the .31 addresses)
 #   - container names end in -staging
-#   - image tag discord-deepseek-bot:v3dev          (production: discord-deepseek-bot:local)
+#   - image tags discord-deepseek-bot:v3dev, ddb-tools:v3dev
+#     (production: discord-deepseek-bot:local, ddb-tools:local)
 #   - data lives in ./data-staging, secrets in .env.staging (created by hand, never committed)
 #
 # Isolation rules are identical to the production stack: no ports, no docker socket, not
@@ -39,8 +41,9 @@ x-proxy-env: &proxy-env
   HTTP_PROXY: http://egress:3128
   https_proxy: http://egress:3128
   http_proxy: http://egress:3128
-  NO_PROXY: fetcher
-  no_proxy: fetcher
+  # fetcher and tools live on botnet: their traffic must never go through the egress proxy.
+  NO_PROXY: fetcher,172.31.0.21
+  no_proxy: fetcher,172.31.0.21
 
 x-no-host-names: &no-host-names
   # Belt and braces: Docker Desktop host names resolve to the container's own loopback.
@@ -88,6 +91,7 @@ services:
     depends_on:
       - egress
       - fetcher
+      - tools
     # Secrets + settings: a separate Discord bot token and DeepSeek key for staging.
     # .env.staging is created by hand and never committed; the fetcher never gets it.
     env_file:
@@ -95,6 +99,8 @@ services:
     environment:
       <<: *proxy-env
       DATA_DIR: /data
+      # Read-only model tools (design-v3 §10), the staging tools container.
+      TOOLS_MCP_URL: http://172.31.0.21:8090/mcp
     user: "10001:10001"
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
@@ -180,6 +186,74 @@ services:
     networks:
       botnet:
         ipv4_address: 172.31.0.20
+    extra_hosts: *no-host-names
+
+  # Keyless MCP tools server: search / read_page / read_video, streamable HTTP on /mcp.
+  # NO env_file and no mounts (server.py refuses to start if a secret is present).
+  tools:
+    <<: *hardening
+    build:
+      context: ./tools
+      dockerfile: Dockerfile
+    image: ddb-tools:v3dev
+    container_name: discord-deepseek-bot-tools-staging
+    depends_on:
+      - egress
+      - searxng
+    environment:
+      HTTPS_PROXY: http://egress:3128
+      HTTP_PROXY: http://egress:3128
+      https_proxy: http://egress:3128
+      http_proxy: http://egress:3128
+      # SearXNG is on botnet: it must NOT go through the egress proxy.
+      NO_PROXY: searxng
+      no_proxy: searxng
+      SEARXNG_URL: http://searxng:8080
+    user: "10001:10001"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.5
+    pids_limit: 50
+    networks:
+      botnet:
+        ipv4_address: 172.31.0.21
+    extra_hosts: *no-host-names
+
+  # Keyless SearXNG for the staging tools container. Same settings file as production
+  # (outgoing traffic via egress:3128, allowed by egress/squid.staging.conf for .22).
+  # SEARXNG_SECRET overrides server.secret_key and comes from the shared searxng.env.
+  searxng:
+    <<: *hardening
+    # Pinned by digest = the 2026.11.13-219b63b20 build (same tag scheme as the egress image).
+    image: searxng/searxng@sha256:048e613ce4a7ddc35dfb05a0b8ede795a054187b3c3b89518adc37d5e03a8297
+    container_name: discord-deepseek-bot-searxng-staging
+    depends_on:
+      - egress
+    env_file:
+      - searxng.env
+    environment:
+      GRANIAN_HOST: 0.0.0.0
+      GRANIAN_PORT: "8080"
+    # uid/gid 977 = "searxng" in the upstream image.
+    user: "977:977"
+    # The only mount: settings, read-only. The image's own /etc/searxng/settings.yml is replaced.
+    volumes:
+      - type: bind
+        source: ./searxng/settings.yml
+        target: /etc/searxng/settings.yml
+        read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777
+      - /var/cache/searxng:rw,noexec,nosuid,nodev,size=16m,uid=977,gid=977,mode=0700
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.5
+    pids_limit: 100
+    networks:
+      botnet:
+        ipv4_address: 172.31.0.22
     extra_hosts: *no-host-names
 
 networks:

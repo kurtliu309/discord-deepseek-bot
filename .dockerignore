@@ -9,5 +9,6 @@
 !guildmem.py
 !setup_ui.py
 !migrate_v3.py
+!toolloop.py
 !prompts/
 !prompts/**

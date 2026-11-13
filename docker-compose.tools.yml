@@ -1,8 +1,9 @@
 # Service fragment: `tools` (keyless MCP tools server) + `searxng` (keyless search).
-# Design: docs/notes/design-v3.md §10. This file is NOT a standalone stack — it is meant to
-# be merged into docker-compose.yml by whoever does the real deployment:
+# Design: docs/notes/design-v3.md §10.
 #
-#   docker compose -f docker-compose.yml -f docker-compose.tools.yml up -d --build
+# 已合并进 docker-compose.yml / docker-compose.staging.yml，本文件仅作参考（不要再叠加使用）。
+# ALREADY MERGED into docker-compose.yml and docker-compose.staging.yml — kept for reference
+# only. Do not stack it on top of those files (the service names would collide).
 #
 # YAML anchors do not cross files, so the x-hardening settings are spelled out here
 # (identical values to docker-compose.yml). When the blocks are pasted into

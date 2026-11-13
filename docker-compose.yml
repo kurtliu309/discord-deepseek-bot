@@ -1,14 +1,17 @@
-# Discord <-> DeepSeek chat bot (v3, see docs/notes/design-v3.md). Chat only: the model has no tools.
+# Discord <-> DeepSeek chat bot (v3, see docs/notes/design-v3.md).
 #
 #   bot, scheduler (hold secrets) --botnet--> egress (Squid) --egress_net--> Discord + api.deepseek.com only
 #   fetcher (NO secrets)          --botnet--> egress (Squid) --egress_net--> any public host (443)
+#   tools, searxng (NO secrets)   --botnet--> egress (Squid) --egress_net--> any public host (443)
 #   bot, scheduler --botnet--> fetcher:8080 (URLs, files, RSS -> plain text)
+#   bot --botnet--> tools:8090/mcp (read-only model tools) --botnet--> searxng:8080 (JSON search API)
 #
 # Isolation rules (do not relax): no ports, no docker socket, not privileged, non-root,
 # read-only root fs, all capabilities dropped, everything on `botnet` only (egress also on
 # egress_net). Mounts (v3, Kurt approved 2026-11-14): scheduler gets ./data -> /data (rw);
 # bot gets ./data/guilds -> /data/guilds (rw, /setup writes configs) and
-# ./data/shared -> /data/shared (ro, persona library + news material). Nothing else.
+# ./data/shared -> /data/shared (ro, persona library + news material); searxng gets
+# ./searxng/settings.yml (ro). Nothing else.
 # Addresses on botnet are pinned because egress/squid.conf applies rules per source address.
 
 name: discord-deepseek-bot
@@ -33,8 +36,9 @@ x-proxy-env: &proxy-env
   HTTP_PROXY: http://egress:3128
   https_proxy: http://egress:3128
   http_proxy: http://egress:3128
-  NO_PROXY: fetcher
-  no_proxy: fetcher
+  # fetcher and tools live on botnet: their traffic must never go through the egress proxy.
+  NO_PROXY: fetcher,172.30.0.21
+  no_proxy: fetcher,172.30.0.21
 
 x-no-host-names: &no-host-names
   # Belt and braces: Docker Desktop host names resolve to the container's own loopback.
@@ -75,6 +79,7 @@ services:
     depends_on:
       - egress
       - fetcher
+      - tools
     # Secrets + settings come only from .env (passed as environment variables;
     # the .env file itself is NOT mounted and is excluded from the image by .dockerignore).
     env_file:
@@ -82,6 +87,9 @@ services:
     environment:
       <<: *proxy-env
       DATA_DIR: /data
+      # Read-only model tools (design-v3 §10). Plain http on botnet: no auth, the network
+      # isolation is the boundary. Public guilds never get a tool list, so never call this.
+      TOOLS_MCP_URL: http://172.30.0.21:8090/mcp
     user: "10001:10001"
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
@@ -170,6 +178,78 @@ services:
     networks:
       botnet:
         ipv4_address: 172.30.0.20
+    extra_hosts: *no-host-names
+
+  # Keyless MCP tools server: search / read_page / read_video, streamable HTTP on /mcp.
+  # NO env_file and no mounts: it must never see a secret (server.py refuses to start if
+  # one is present) and it cannot read guild configs — trust level and quota are checked in
+  # the bot, the guild id and domain allow-list again here. Merged from docker-compose.tools.yml.
+  tools:
+    <<: *hardening
+    build:
+      context: ./tools
+      dockerfile: Dockerfile
+    image: ddb-tools:local
+    container_name: discord-deepseek-bot-tools
+    depends_on:
+      - egress
+      - searxng
+    environment:
+      HTTPS_PROXY: http://egress:3128
+      HTTP_PROXY: http://egress:3128
+      https_proxy: http://egress:3128
+      http_proxy: http://egress:3128
+      # SearXNG is on botnet: it must NOT go through the egress proxy.
+      NO_PROXY: searxng
+      no_proxy: searxng
+      SEARXNG_URL: http://searxng:8080
+    user: "10001:10001"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.5
+    pids_limit: 50
+    networks:
+      botnet:
+        ipv4_address: 172.30.0.21
+    extra_hosts: *no-host-names
+
+  # Keyless SearXNG, used only by `tools` through the JSON API. Its one secret is the
+  # cookie-signing key: searxng/settings.yml keeps the REPLACE_ME_AT_DEPLOY placeholder and
+  # SearXNG's own settings loader overrides server.secret_key from SEARXNG_SECRET, read here
+  # from searxng.env (that one variable only, never committed). No other env_file, and the
+  # proxy is configured in searxng/settings.yml (outgoing.proxies).
+  searxng:
+    <<: *hardening
+    # Pinned by digest = the 2026.11.13-219b63b20 build (same tag scheme as the egress image).
+    image: searxng/searxng@sha256:048e613ce4a7ddc35dfb05a0b8ede795a054187b3c3b89518adc37d5e03a8297
+    container_name: discord-deepseek-bot-searxng
+    depends_on:
+      - egress
+    env_file:
+      - searxng.env
+    environment:
+      GRANIAN_HOST: 0.0.0.0
+      GRANIAN_PORT: "8080"
+    # uid/gid 977 = "searxng" in the upstream image.
+    user: "977:977"
+    # The only mount: settings, read-only. The image's own /etc/searxng/settings.yml is replaced.
+    volumes:
+      - type: bind
+        source: ./searxng/settings.yml
+        target: /etc/searxng/settings.yml
+        read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777
+      - /var/cache/searxng:rw,noexec,nosuid,nodev,size=16m,uid=977,gid=977,mode=0700
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.5
+    pids_limit: 100
+    networks:
+      botnet:
+        ipv4_address: 172.30.0.22
     extra_hosts: *no-host-names
 
 networks:
