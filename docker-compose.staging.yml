@@ -1,0 +1,198 @@
+# Staging stack for v3: same programs and hardening as docker-compose.yml, but a fully
+# separate project so it can run next to the production stack without touching it.
+#
+#   docker compose -f docker-compose.staging.yml -p ddb-staging up -d --build
+#   docker compose -f docker-compose.staging.yml -p ddb-staging logs --tail 50 bot
+#
+# Kept apart on purpose (nothing here may collide with production):
+#   - project/network names: ddb-staging_*            (production: discord-deepseek-bot_*)
+#   - subnet 172.31.0.0/24: egress .2, bot .10, scheduler .11, fetcher .20
+#     (production uses 172.30.0.0/24; egress/squid.staging.conf applies the same rules
+#      to the .31 addresses)
+#   - container names end in -staging
+#   - image tag discord-deepseek-bot:v3dev          (production: discord-deepseek-bot:local)
+#   - data lives in ./data-staging, secrets in .env.staging (created by hand, never committed)
+#
+# Isolation rules are identical to the production stack: no ports, no docker socket, not
+# privileged, non-root, read-only root fs, all capabilities dropped, botnet internal with no
+# host gateway. The only mounts are the staging data folders below.
+
+name: ddb-staging
+
+x-hardening: &hardening
+  restart: unless-stopped
+  init: true
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  privileged: false
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-proxy-env: &proxy-env
+  HTTPS_PROXY: http://egress:3128
+  HTTP_PROXY: http://egress:3128
+  https_proxy: http://egress:3128
+  http_proxy: http://egress:3128
+  NO_PROXY: fetcher
+  no_proxy: fetcher
+
+x-no-host-names: &no-host-names
+  # Belt and braces: Docker Desktop host names resolve to the container's own loopback.
+  - "host.docker.internal:127.0.0.1"
+  - "gateway.docker.internal:127.0.0.1"
+  - "kubernetes.docker.internal:127.0.0.1"
+
+services:
+  egress:
+    <<: *hardening
+    build:
+      context: ./egress
+      dockerfile: Dockerfile
+    image: discord-deepseek-bot-egress:v3dev
+    container_name: discord-deepseek-bot-egress-staging
+    user: "13:13"
+    # The image bakes egress/squid.conf (production addresses); the staging config is the
+    # same rules for 172.31.0.x, mounted read-only over it.
+    volumes:
+      - type: bind
+        source: ./egress/squid.staging.conf
+        target: /etc/squid/squid.conf
+        read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+      - /var/run/squid:rw,noexec,nosuid,nodev,size=1m,uid=13,gid=13,mode=0700
+      - /var/spool/squid:rw,noexec,nosuid,nodev,size=1m,uid=13,gid=13,mode=0700
+      - /var/log/squid:rw,noexec,nosuid,nodev,size=1m,uid=13,gid=13,mode=0700
+    mem_limit: 128m
+    memswap_limit: 128m
+    cpus: 0.25
+    pids_limit: 50
+    networks:
+      botnet:
+        ipv4_address: 172.31.0.2
+      egress_net: {}
+
+  bot:
+    <<: *hardening
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: discord-deepseek-bot:v3dev
+    container_name: discord-deepseek-bot-staging
+    depends_on:
+      - egress
+      - fetcher
+    # Secrets + settings: a separate Discord bot token and DeepSeek key for staging.
+    # .env.staging is created by hand and never committed; the fetcher never gets it.
+    env_file:
+      - .env.staging
+    environment:
+      <<: *proxy-env
+      DATA_DIR: /data
+    user: "10001:10001"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    volumes:
+      - type: bind
+        source: ./data-staging/guilds
+        target: /data/guilds
+        read_only: false
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ./data-staging/shared
+        target: /data/shared
+        read_only: true
+        bind:
+          create_host_path: true
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.5
+    pids_limit: 100
+    networks:
+      botnet:
+        ipv4_address: 172.31.0.10
+    extra_hosts: *no-host-names
+
+  # Nightly recap + morning topics for the staging guilds. Same image and hardening.
+  scheduler:
+    <<: *hardening
+    image: discord-deepseek-bot:v3dev
+    pull_policy: never
+    container_name: discord-deepseek-bot-scheduler-staging
+    entrypoint: ["python", "/opt/app/scheduler.py"]
+    depends_on:
+      - egress
+      - fetcher
+      - bot
+    env_file:
+      - .env.staging
+    environment:
+      <<: *proxy-env
+      DATA_DIR: /data
+    user: "10001:10001"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    # Guild configs, profile blocks, material and recaps, plus the shared persona library.
+    volumes:
+      - type: bind
+        source: ./data-staging
+        target: /data
+        read_only: false
+        bind:
+          create_host_path: true
+    mem_limit: 128m
+    memswap_limit: 128m
+    cpus: 0.25
+    pids_limit: 50
+    networks:
+      botnet:
+        ipv4_address: 172.31.0.11
+    extra_hosts: *no-host-names
+
+  # Keyless fetcher: web pages, RSS, file parsing. NO env_file: it must never see a secret.
+  fetcher:
+    <<: *hardening
+    image: discord-deepseek-bot:v3dev
+    pull_policy: never
+    container_name: discord-deepseek-bot-fetcher-staging
+    entrypoint: ["python", "/opt/app/fetcher.py"]
+    depends_on:
+      - egress
+    environment:
+      HTTPS_PROXY: http://egress:3128
+      HTTP_PROXY: http://egress:3128
+      https_proxy: http://egress:3128
+      http_proxy: http://egress:3128
+    user: "10001:10001"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.5
+    pids_limit: 50
+    networks:
+      botnet:
+        ipv4_address: 172.31.0.20
+    extra_hosts: *no-host-names
+
+networks:
+  botnet:
+    driver: bridge
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.gateway_mode_ipv4: isolated
+    enable_ipv6: false
+    ipam:
+      config:
+        - subnet: 172.31.0.0/24
+  egress_net:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "false"

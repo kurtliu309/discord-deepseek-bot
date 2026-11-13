@@ -1,0 +1,78 @@
+# LOCAL FUNCTION TEST STACK ONLY. Never part of the real deployment.
+#
+#   docker compose -f tools/docker-compose.test.yml -p ddb-toolstest up -d --build
+#   py tools/tests/live_probe.py            (or: docker exec ... python tests/live_probe.py)
+#   docker compose -f tools/docker-compose.test.yml -p ddb-toolstest down
+#
+# Differences from the real stack (on purpose, so the test needs nothing from production):
+#   - own network `ddb-toolstest_net`, direct internet (no egress container, no proxy env);
+#   - SearXNG uses tests/searxng-settings.test.yml (same settings minus outgoing.proxies);
+#   - a host port is published, 127.0.0.1:18090 -> tools:8090, so a probe can connect.
+# Everything else (hardening, keyless, read-only, non-root) matches docker-compose.tools.yml.
+
+name: ddb-toolstest
+
+services:
+  searxng:
+    image: searxng/searxng@sha256:048e613ce4a7ddc35dfb05a0b8ede795a054187b3c3b89518adc37d5e03a8297
+    container_name: ddb-toolstest-searxng
+    restart: "no"
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      GRANIAN_HOST: 0.0.0.0
+      GRANIAN_PORT: "8080"
+    user: "977:977"
+    volumes:
+      - type: bind
+        source: ./tests/searxng-settings.test.yml
+        target: /etc/searxng/settings.yml
+        read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777
+      - /var/cache/searxng:rw,noexec,nosuid,nodev,size=16m,uid=977,gid=977,mode=0700
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.5
+    pids_limit: 100
+    networks:
+      - testnet
+
+  tools:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ddb-tools:test
+    container_name: ddb-toolstest-tools
+    restart: "no"
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      - searxng
+    environment:
+      # No proxy in the test stack: direct internet.
+      SEARXNG_URL: http://searxng:8080
+    user: "10001:10001"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    ports:
+      # Test-only: lets tools/tests/live_probe.py connect from the host.
+      - "127.0.0.1:18090:8090"
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.5
+    pids_limit: 50
+    networks:
+      - testnet
+
+networks:
+  testnet:
+    driver: bridge

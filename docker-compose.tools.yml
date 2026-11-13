@@ -1,0 +1,112 @@
+# Service fragment: `tools` (keyless MCP tools server) + `searxng` (keyless search).
+# Design: docs/notes/design-v3.md §10. This file is NOT a standalone stack — it is meant to
+# be merged into docker-compose.yml by whoever does the real deployment:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.tools.yml up -d --build
+#
+# YAML anchors do not cross files, so the x-hardening settings are spelled out here
+# (identical values to docker-compose.yml). When the blocks are pasted into
+# docker-compose.yml instead, `<<: *hardening` may replace that part.
+#
+# Addresses are pinned on botnet because egress/squid.conf applies rules per source address:
+#   tools    172.30.0.21   bot connects to http://172.30.0.21:8090/mcp
+#   searxng  172.30.0.22   used only by tools (http://searxng:8080)
+#
+# Rules (same as the rest of the stack): botnet only, no ports, no env_file, no mounts except
+# the SearXNG settings file (read-only), no docker socket, non-root, read-only root fs,
+# all capabilities dropped, no-new-privileges, memory/cpu/pids limits, rotated logs.
+
+services:
+  tools:
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    privileged: false
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    build:
+      context: ./tools
+      dockerfile: Dockerfile
+    image: ddb-tools:local
+    container_name: discord-deepseek-bot-tools
+    depends_on:
+      - egress
+      - searxng
+    # NO env_file: this container must never see DISCORD_BOT_TOKEN / DEEPSEEK_API_KEY
+    # (server.py refuses to start if one is present). Only the proxy + SearXNG address.
+    environment:
+      HTTPS_PROXY: http://egress:3128
+      HTTP_PROXY: http://egress:3128
+      https_proxy: http://egress:3128
+      http_proxy: http://egress:3128
+      # SearXNG is on botnet: it must NOT go through the egress proxy.
+      NO_PROXY: searxng
+      no_proxy: searxng
+      SEARXNG_URL: http://searxng:8080
+    user: "10001:10001"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.5
+    pids_limit: 50
+    networks:
+      botnet:
+        ipv4_address: 172.30.0.21
+    extra_hosts:
+      - "host.docker.internal:127.0.0.1"
+      - "gateway.docker.internal:127.0.0.1"
+      - "kubernetes.docker.internal:127.0.0.1"
+
+  searxng:
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    privileged: false
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Pinned by digest = the 2026.11.13-219b63b20 build (same tag scheme as the egress image).
+    image: searxng/searxng@sha256:048e613ce4a7ddc35dfb05a0b8ede795a054187b3c3b89518adc37d5e03a8297
+    container_name: discord-deepseek-bot-searxng
+    depends_on:
+      - egress
+    # NO env_file (keyless). The proxy is configured in searxng/settings.yml (outgoing.proxies).
+    environment:
+      GRANIAN_HOST: 0.0.0.0
+      GRANIAN_PORT: "8080"
+    # uid/gid 977 = "searxng" in the upstream image.
+    user: "977:977"
+    # The only mount: settings, read-only. The image's own /etc/searxng/settings.yml is replaced.
+    volumes:
+      - type: bind
+        source: ./searxng/settings.yml
+        target: /etc/searxng/settings.yml
+        read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777
+      - /var/cache/searxng:rw,noexec,nosuid,nodev,size=16m,uid=977,gid=977,mode=0700
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.5
+    pids_limit: 100
+    networks:
+      botnet:
+        ipv4_address: 172.30.0.22
+    extra_hosts:
+      - "host.docker.internal:127.0.0.1"
+      - "gateway.docker.internal:127.0.0.1"
+      - "kubernetes.docker.internal:127.0.0.1"

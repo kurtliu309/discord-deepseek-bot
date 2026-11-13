@@ -3,28 +3,35 @@
 一个跑在 Windows 电脑（Docker Desktop）上的 Discord 聊天 bot，自写 Python（`bot.py`）+ DeepSeek API。llmcord 已经拆掉。
 
 - **第一阶段只聊天**：模型没有任何 tools、function calling、MCP，也不执行代码。它看到的一切外部内容（聊天、附件、网页、RSS）都是代码取来、当资料喂进去的。
-- 四个容器：`bot`（回复、插话、余额、`/rule`、`/feed`）、`scheduler`（每日总结和话题）、`fetcher`（**无密钥**，抓网页、RSS、解析附件）、`egress`（Squid 白名单代理）。
+- 四个容器：`bot`（回复、插话、余额、`/rule`、`/feed`、`/setup`）、`scheduler`（按群每日总结和话题）、`fetcher`（**无密钥**，抓网页、RSS、解析附件）、`egress`（Squid 白名单代理）。
 - bot 和 scheduler 只能连 Discord 和 `api.deepseek.com`（经 egress）；fetcher 能连任意公网，但私网 / 回环永远拦死。
-- 唯一挂载：`./data` → scheduler 的 `/data`（群档案 + 最近 10 天总结）。`data/` 不进 git。
+- v3 起每个群一份配置：`data/guilds/<群ID>/config.yaml`，人设来自 `data/shared/personas/`。没配置的群 bot 一句话不说。
+- 挂载：scheduler 拿 `./data` → `/data`（读写）；bot 拿 `./data/guilds` → `/data/guilds`（读写，`/setup` 要写配置）和 `./data/shared` → `/data/shared`（只读）。`data/` 不进 git。
 - 电脑上的 Claude Code 在容器外用 `docker compose` 管理它，运维步骤见 skill `chatbot-ops`（`.claude/skills/chatbot-ops/SKILL.md`）。
 
-项目路径：`D:\Kurt\cc_sandbox\discord-deepseek-bot`。下文命令都在 PowerShell 里、在这个文件夹里执行。设计见 [docs/notes/design-v2.md](docs/notes/design-v2.md)。
+项目路径：`D:\Kurt\cc_sandbox\discord-deepseek-bot`。下文命令都在 PowerShell 里、在这个文件夹里执行。设计见 [docs/notes/design-v3.md](docs/notes/design-v3.md)（v2 的旧设计在 `design-v2.md`）。
 
 ## 文件
 
 | 文件 | 作用 |
 |---|---|
-| `bot.py` | bot 本体（服务 `bot`）：@ 回复、主动插话、每日余额、`/rule`、`/feed`、附件和网址交给 fetcher、按需写 `.md` |
-| `scheduler.py` | 每日任务（服务 `scheduler`）：22:00 总结、09:00 话题，读写 `data/` |
+| `bot.py` | bot 本体（服务 `bot`）：@ 回复、主动插话、按群余额、`/rule`、`/feed`、`/setup`、附件和网址交给 fetcher、按需写 `.md` |
+| `scheduler.py` | 每日任务（服务 `scheduler`）：按每个群自己的时间/频道跑总结和话题，读写 `data/guilds/` |
+| `guildcfg.py` | 按群配置：pydantic 模型、功能登记表 + 信任等级、热重载 |
+| `persona.py` | 人设库拼接（公共底线 + 角色 + 风格 + 语言 + 群补充）和 chatty 分条 |
+| `guildmem.py` | 按群记忆：档案按块读写（每块有字符上限）、最近 10 篇总结 |
+| `setup_ui.py` | `/setup` 的交互逻辑和权限判断（纯函数，可单测） |
+| `migrate_v3.py` | 把 v2 的 `data/`（环境变量设置 + group-profile.md + recaps）迁成 v3 目录结构 |
 | `fetcher.py` | 无密钥抓取服务（服务 `fetcher`，:8080）：网页 → 纯文本、RSS、Reddit、附件解析 |
 | `Dockerfile` | 一个镜像跑三个程序，`python:3.13-slim`，uid 10001 |
 | `prompts/default.txt` | 默认人设（打进镜像，只读） |
 | `requirements.txt` | 锁定版本的 Python 依赖 |
 | `egress/` | Squid 白名单代理：`Dockerfile`、`squid.conf`（按来源地址分规则）、`allowlist.txt` |
-| `docker-compose.yml` | 四个服务、两张网络，以及所有 hardening 设置 |
-| `tests/` | 单元测试（余额、插话节奏、解析等纯逻辑） |
+| `docker-compose.yml` | 正式栈：四个服务、两张网络，以及所有 hardening 设置 |
+| `docker-compose.staging.yml` | 测试栈：独立项目、网段 `172.31.0.0/24`、`./data-staging`、`.env.staging` |
+| `tests/` | 单元测试（余额、插话节奏、解析、按群配置/记忆/调度等纯逻辑） |
 | `.env.example` | `.env` 的模板。`.env` 只放在本机，不进 git |
-| `data/` | 本机数据（git 忽略）：`group-profile.md`、`recaps/YYYY-MM-DD.md` |
+| `data/` | 本机数据（git 忽略）：`guilds/<群ID>/`（配置、档案块、总结、素材）、`shared/personas/` |
 
 ## 1. 安装 Docker Desktop
 
@@ -72,9 +79,10 @@ powercfg /change monitor-timeout-ac 15    # 屏幕可以关，不影响 bot
 
 1. Discord → 用户设置 → 高级（Advanced）→ 打开 **开发者模式（Developer Mode）**。
 2. 右键自己的头像 → **复制用户 ID（Copy User ID）**，填进 `OWNER_USER_ID`。
-3. 右键服务器里的频道（或分类）→ **复制频道 ID（Copy Channel ID）**：
-   - `BLOCKED_CHANNEL_IDS`：bot 完全安静的频道，比如 `#general`；
-   - `POST_CHANNEL_ID`：总结和话题发到哪个频道，比如一个专门给 bot 的频道。
+3. 右键服务器里的频道（或分类）→ **复制频道 ID（Copy Channel ID）**：v3 起这些都在群配置里填（`/setup` 菜单，或 `data/guilds/<群ID>/config.yaml`）：
+   - `quiet_channels`：bot 完全安静的频道，比如 `#general`；
+   - `features.recap.channel` / `features.topics.channel`：总结和话题发到哪个频道，比如一个专门给 bot 的频道。
+   - `allowed_channels`：只在这些频道说话（测试栈用；`null` = 所有频道）。
 
 ## 4. DeepSeek API key
 
@@ -92,18 +100,13 @@ notepad .env
 | 键 | 填什么 |
 |---|---|
 | `DISCORD_BOT_TOKEN` / `DISCORD_CLIENT_ID` / `DEEPSEEK_API_KEY` | 上面拿到的三个值。**只有 Kurt 自己改** |
-| `OWNER_USER_ID` | Kurt 的 user ID。只有他能私信 bot、用 `/feed`，@ bot 和私信也不扣余额 |
-| `BLOCKED_CHANNEL_IDS` | bot 完全不理的频道或分类 ID，逗号分隔（子频道跟着分类走），比如 `#general` |
-| `POST_CHANNEL_ID` | scheduler 发总结和话题的频道 ID |
+| `OWNER_USER_ID` | Kurt 的 user ID。只有他能私信 bot、用 `/feed`、跑 `/setup`，@ bot 和私信也不扣余额 |
 | `DEEPSEEK_MODEL` | 默认 `deepseek-flash` |
-| `SYSTEM_PROMPT` | 临时人设，一行，换行写 `\n`。留空就用 `prompts/default.txt` |
 | `STATUS_MESSAGE` | bot 的在线状态文字，留空不显示 |
-| `REPLY_BUDGET` / `BUDGET_RESET_TIME` | 每天可用的回复条数（50）和恢复时间（09:00） |
-| `RANDOM_CHANCE` / `FX_TOPIC_CHANCE` / `BURST_COUNT` / `BURST_WINDOW_SECONDS` / `COOLDOWN_SECONDS` | 主动插话：每条消息 3% 概率，Houdini/FX 话题 5%；3 分钟超过 12 条；插话后冷却 10 分钟 |
 | `CONTEXT_MESSAGES` | 回复带多少条上下文（12） |
-| `SCHED_TZ` | 时区，默认 `Australia/Adelaide` |
-| `SUMMARY_TIME` / `TOPICS_TIME` | 每日总结（22:00）、早上话题（09:00） |
-| `TOPICS_COUNT` / `RECAP_CONTEXT` / `RECAP_KEEP_DAYS` | 话题数（3）、参考几篇旧总结（3）、保留几天总结（10） |
+| `SCHED_TZ` | 时区，默认 `Australia/Adelaide`（群配置里的时间都用这个时区） |
+
+**v3 起，下面这些都不在 `.env` 里了**，改成按群配置：信任等级、人设 / 风格 / 语言 / 群补充提示词、回复和查询额度及恢复时间、`allowed_channels`、安静频道、插话概率和冷却、`recap` / `topics` 的开关 / 频道 / 时间 / 条数 / 订阅源、隐私确认（`consent`）。在 Discord 里用 `/setup` 改，或直接编辑 `data/guilds/<群ID>/config.yaml`（scheduler 每分钟、bot 每 30 秒自动重载）。旧的 `BLOCKED_CHANNEL_IDS`、`POST_CHANNEL_ID`、`SUMMARY_TIME`、`TOPICS_TIME`、`TOPICS_COUNT`、`REPLY_BUDGET`、`BUDGET_RESET_TIME`、`RANDOM_CHANCE`、`FX_TOPIC_CHANCE`、`BURST_*`、`COOLDOWN_SECONDS`、`SYSTEM_PROMPT`、`RECAP_CONTEXT`、`RECAP_KEEP_DAYS` 都可以删掉了（迁移脚本会读一次，见下文“多群配置 / 测试栈 / 迁移”）。
 
 记事本默认保存为 UTF-8，这样没问题。不要存成“UTF-8 with BOM”或 ANSI。
 
@@ -113,13 +116,13 @@ notepad .env
 |---|---|
 | 服务器频道里 @bot，或回复 bot 的消息 | 回。谁都行，受每日余额限制 |
 | 私信 bot | 只回 Kurt，且不扣余额；其他人一律不回 |
-| 主动插话 | `BLOCKED_CHANNEL_IDS` 以外的频道，按上面三条规则自己跳进来 |
-| `BLOCKED_CHANNEL_IDS` 里的频道（含子频道） | 完全安静：不插话，@ 也不回 |
+| 主动插话 | 群配置 `quiet_channels` 以外的频道，按上面三条规则自己跳进来 |
+| `quiet_channels` 里的频道（含子频道） | 完全安静：不插话，@ 也不回 |
 | 消息来自其他 bot | 一律不理 |
 | `/rule`、`/rule <问题>` | 只有提问者看得到，不扣余额 |
 | `/feed` | 只有 Kurt 能用，立刻把余额补满 |
 
-- 余额 50 条/天，在 bot 内存里；用完的第一条 @ 会回一句“out of juice. ask kurt to /feed me”，之后安静。**重启 bot 也会补满。**
+- 余额按群算（默认 50 条/天，`budget.replies_per_day`），在 bot 内存里；用完的第一条 @ 会回一句“out of juice. ask kurt to /feed me”，之后安静。**重启 bot 也会补满。**
 - 附件和链接：单文件 ≤ 10 MB、每条消息最多 3 个、最多 3 个网址；支持 txt/md/csv/json/yaml/log、代码、usda、pdf/docx/xlsx/pptx。读不了的会回一句读不了。
 - 读附件或网址的回复照常扣 1 条；只有对方明确要文档时，才以 `.md` 附件回复。
 
@@ -174,6 +177,60 @@ docker network inspect discord-deepseek-bot_botnet --format '{{json .IPAM.Config
 - 贴一个 https 链接或小附件，它应该能读到内容。
 - Kurt 的私信里 `/rule` 应该出规则卡，`/feed` 应该回“fed”。
 
+## 多群配置 / 测试栈 / 迁移
+
+### 多群配置（v3）
+
+```
+data/
+├─ shared/personas/           人设库（_base.md、<人设>/character.md、_styles/<风格>.md），各群共用、只读
+└─ guilds/<群ID>/
+   ├─ config.yaml             这个群的全部设置（见下）
+   ├─ profile/                档案按块：kurt.md（Kurt 手写，bot 只读）、threads/people/jokes/unfinished/drift.md
+   ├─ recaps/YYYY-MM-DD.md    每晚总结，只留最近 10 篇
+   ├─ material.json           早上话题的预取素材
+   └─ state.json              “今天这个任务已经跑过”，防重启重复发
+```
+
+- 一个群一个文件夹，bot / scheduler 只读写**自己那个群**的文件夹和 `shared/`；私信固定用 `guilds/dm-owner/`。
+- 没配置（没有 `config.yaml` 或校验失败）的群：bot 一句话不说，每个进程启动后最多私信 Kurt 一次：“I got added to <群名> but it isn't set up yet. Run /setup there.”
+- `/setup`（只有 Kurt，回复仅自己可见）：信任等级、人设、风格、语言、两个额度、插话、安静频道、`recap`/`topics` 的开关+频道+时间、`consent`。保存即写 `config.yaml` 并立即重载。
+- 白名单（`allow_domains`）不在菜单里，需要时手改 yaml。
+- 信任等级是天花板：`public` 群就算把 `tools` 写成 `on` 也不生效（`effective()`）。群配置里的时间用 `SCHED_TZ` 时区。
+- 手动跑一次某个群的每日任务：`docker compose run --rm --no-deps scheduler --once recap --guild <群ID> --dry-run`（去掉 `--dry-run` 就真发）。
+
+### 测试栈
+
+测试栈跟正式栈完全分开：独立项目、独立网络 `172.31.0.0/24`、独立容器名（`-staging` 后缀）、独立数据 `./data-staging`、独立镜像 tag `discord-deepseek-bot:v3dev`、独立 `/.env.staging`。加固项和正式栈一模一样。
+
+```powershell
+# .env.staging 由 Kurt 手建（最好用另一个 Discord bot token），不进 git
+docker compose -f docker-compose.staging.yml -p ddb-staging config   # 先校验能解析
+docker compose -f docker-compose.staging.yml -p ddb-staging up -d --build
+docker compose -f docker-compose.staging.yml -p ddb-staging logs --tail 50 bot
+docker compose -f docker-compose.staging.yml -p ddb-staging down
+```
+
+- egress 用 `egress/squid.staging.conf`（跟 `squid.conf` 规则相同，只是来源地址换成 `172.31.0.x`）。
+- `data-staging/guilds/1317847113559965736/` 是头脑警察的测试配置：`allowed_channels: [1570775686862471301]`，recap/topics 也只发到 `1570775686862471301`（#bot-test），所以测试 bot 不会在别的频道说话。
+- 测试栈不碰正式栈的网络和容器，可以同时跑；确认没问题再切正式。
+
+### 从 v2 迁移
+
+v2 的设置散在 `.env` 里。`migrate_v3.py` 读环境变量 + `data/group-profile.md` + `data/recaps/`，生成 v3 的群目录。**原来的东西不删**（`group-profile.md` 和 `recaps/` 会改名成 `.v2.bak`），可以重复跑。
+
+```powershell
+# 用 scheduler 服务跑：它有 .env（旧设置）和 ./data 挂载
+docker compose run --rm --no-deps --entrypoint python scheduler `
+  /opt/app/migrate_v3.py --data /data --guild-id <群ID> --guild-name <群名>
+# 迁移后重建 bot + scheduler，并检查 data/guilds/<群ID>/config.yaml
+docker compose up -d --build bot scheduler
+```
+
+- 迁移出来的群是 `trust: owner`、`consent: true`，recap/topics 开、频道用旧的 `POST_CHANNEL_ID`，额度 100/60。之后用 `/setup` 调整。
+- `data-staging` 已经迁移过一次（含 `guilds/dm-owner/`）。
+- 正式切换前先在测试栈上用 `/setup`、`/rule`、一次 recap 走一遍。
+
 ## 日常运维
 
 交给电脑上的 Claude Code，用 skill `chatbot-ops`。常用命令：
@@ -225,13 +282,14 @@ docker compose restart bot
 │  fetcher .20    ┘        ▲                       按来源地址放行   ├─▶ 任意公网 443（只有 fetcher）
 │                          │                                       └─▶ 私网 / 回环：全部拒绝
 │  bot / scheduler ────────┘ 网址、附件 → fetcher:8080 → 纯文本
-│  scheduler ──▶ ./data（唯一挂载：群档案 + 最近 10 天总结）
+│  scheduler ──▶ ./data（配置、档案块、素材、最近 10 天总结）
+│  bot ─────────▶ ./data/guilds（读写）+ ./data/shared（只读）
 │         ✗ 主机文件 / 进程 / 局域网 / 其他容器 / Claude
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
 - 箭头只朝一个方向。Claude Code 能管容器，**容器不能反过来调用 Claude、Remote Control 或这台电脑**。容器没有任何指向它们的凭据、socket 或网络路径。
-- **文件**：全栈只有一个挂载 `./data` → scheduler 的 `/data`（读写）。bot 和 fetcher 没有任何挂载，root fs 只读（`read_only: true`），只有内存里的 `/tmp`（tmpfs，noexec）可写。`.env` 不挂进容器，只作为环境变量传给 bot 和 scheduler，`.dockerignore` 也保证它不进镜像。没有 docker socket。
+- **文件**：挂载只有三个（v3 起）：`./data` → scheduler 的 `/data`（读写），`./data/guilds` → bot 的 `/data/guilds`（读写，`/setup` 要写配置），`./data/shared` → bot 的 `/data/shared`（只读，人设库）。fetcher 没有任何挂载，root fs 只读（`read_only: true`），只有内存里的 `/tmp`（tmpfs，noexec）可写。`.env` 不挂进容器，只作为环境变量传给 bot 和 scheduler，`.dockerignore` 也保证它不进镜像。没有 docker socket。
 - **权限**：非 root（bot / scheduler / fetcher uid 10001，egress uid 13），`cap_drop: ALL`，`no-new-privileges`，不是 privileged，有内存 / CPU / pids 上限。
 - **网络**：
   - 四个容器都只接 `botnet`（egress 另接 `egress_net`）。`botnet` 是 `internal: true` + `gateway_mode_ipv4: isolated`：没有出网路由，也没有主机侧的网关 IP，所以连不到主机端口、局域网和互联网。实测直连会报 DNS 解析失败或 network unreachable。

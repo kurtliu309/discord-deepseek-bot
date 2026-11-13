@@ -159,17 +159,20 @@ footer { padding-block: 24px 40px; border-top: 1px solid var(--line); color: var
 <div class="wrap">
   <aside class="news" aria-labelledby="news-title">
     <div class="news-head">
-      <span class="tag">v2.2</span>
+      <span class="tag">v3.0</span>
       <h2 id="news-title"><span class="en">What's new</span><span class="zh">版本更新</span></h2>
-      <time datetime="2026-11-13">2026-11-13</time>
+      <time datetime="2026-11-14">2026-11-14</time>
     </div>
     <ul>
-      <li><span class="en"><b>Backstory</b>: same doomer, now a senior film VFX artist of many years: strong on tech, loves movies, worn out by overtime.</span><span class="zh"><b>身世补充</b>：还是原来那个 doomer，现在是做了多年影视特效的 senior：技术强，爱电影，加班加得很累。</span></li>
-      <li><span class="en"><b>FX talk gets it talking</b>: messages about Houdini/FX now have a 5% jump-in chance instead of 3%.</span><span class="zh"><b>聊特效它更爱插嘴</b>：Houdini/FX 相关消息的插话概率升到 5%（其他还是 3%）。</span></li>
-      <li><span class="en"><b>Quieter recap</b>: the nightly recap no longer @mentions anyone, just names.</span><span class="zh"><b>总结不再 @ 人</b>：每晚总结只写名字，不再 @ 任何人。</span></li>
+      <li><span class="en"><b>One config per server</b>: persona, style, language, feature switches, channels, times, feed list and reply budget now live in <code>data/guilds/&lt;id&gt;/config.yaml</code>. A server without a config gets no replies at all.</span><span class="zh"><b>每个群一份配置</b>：人设、风格、语言、功能开关、频道、时间、订阅源和回复余额都在 <code>data/guilds/&lt;id&gt;/config.yaml</code>。没配置的群它一句话都不说。</span></li>
+      <li><span class="en"><b><code>/setup</code></b>: the owner sets a server up from inside Discord with private menus (trust level, persona, language, budgets, jump-ins, quiet channels, recap/topics, consent).</span><span class="zh"><b><code>/setup</code></b>：Kurt 可以在 Discord 里用仅自己可见的菜单配置一个群（信任等级、人设、语言、额度、插话、安静频道、总结/话题、隐私确认）。</span></li>
+      <li><span class="en"><b>Persona library</b>: shared floor + character + typing style, hot reloaded. A second persona (<i>turtle</i>) and a chatty, multi-message style are included.</span><span class="zh"><b>人设库</b>：公共底线 + 角色 + 打字风格拼起来，改文件立即生效。自带第二个人设（<i>turtle</i>）和分多条发送的 chatty 风格。</span></li>
+      <li><span class="en"><b>Per-server memory</b>: the nightly profile rewrite works block by block and never touches the hand-written block; recaps, reply budget and fetched material are per server.</span><span class="zh"><b>按群记忆</b>：每晚的档案改写改成一块一块写，手写那块它永远不碰；总结、回复余额和抓来的素材也都按群分开。</span></li>
+      <li><span class="en"><b>Scheduler per server</b>: each server gets its recap and topics at its own time and channel, from its own feed list. A server that hasn't consented is never read or summarised.</span><span class="zh"><b>定时任务按群跑</b>：每个群按自己的时间、频道和订阅源收总结和话题。没同意被读取的群，它一个字都不读、也不总结。</span></li>
     </ul>
     <details>
       <summary><span class="en">Earlier versions</span><span class="zh">更早的版本</span></summary>
+      <p><b>v2.2 · 2026-11-13</b> — <span class="en">Senior film VFX backstory; Houdini/FX messages get a 5% jump-in chance; the nightly recap no longer @mentions anyone.</span><span class="zh">补充影视特效 senior 身世；Houdini/FX 话题插话概率升到 5%；每晚总结不再 @ 人。</span></p>
       <p><b>v2.1 · 2026-11-13</b> — <span class="en">New <code>/dev</code>, a smarter <code>/rule</code> that reads the full reference, and file replies that actually arrive (<code>.md</code>, <code>.html</code>, <code>.txt</code>).</span><span class="zh">新增 <code>/dev</code>；<code>/rule</code> 更聪明，会读完整说明；文件回复真的能发出来（<code>.md</code>、<code>.html</code>、<code>.txt</code>）。</span></p>
       <p><b>v2.0 · 2026-11-13</b> — <span class="en">Self-written bot replaces llmcord: jump-ins, daily budget, <code>/rule</code>, <code>/feed</code>, file and link reading through a key-less fetcher, nightly recap and morning topics.</span><span class="zh">自写 bot 替换 llmcord：主动插话、每日余额、<code>/rule</code>、<code>/feed</code>、经无密钥 fetcher 读文件和链接、每晚总结和早上话题。</span></p>
       <p><b>v1.0 · 2026-11-13</b> — <span class="en">First deploy: chat-only bot on llmcord behind an allowlist proxy.</span><span class="zh">首次部署：基于 llmcord 的纯聊天 bot，经白名单代理出网。</span></p>

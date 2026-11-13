@@ -1,0 +1,64 @@
+# SearXNG settings for the keyless search container (design-v3 §10).
+#
+# Mounted read-only at /etc/searxng/settings.yml. Only the tools container talks to it, and
+# only through the JSON API (/search?format=json); the HTML UI is kept only because SearXNG
+# refuses to start with JSON as the sole format.
+#
+# PRODUCTION FILE — outgoing traffic goes through the egress proxy (Squid), which allows any
+# public host on 443 and blocks private / loopback / link-local ranges. The local test stack
+# uses tools/tests/searxng-settings.test.yml instead (same file minus the proxy).
+
+use_default_settings:
+  engines:
+    # Only general-purpose engines; everything else in the default set is switched off.
+    # Enabled: duckduckgo, bing, brave, wikipedia, github.
+    keep_only:
+      - duckduckgo
+      - bing
+      - brave
+      - wikipedia
+      - github
+
+general:
+  instance_name: "ddb-search"
+  # No statistics, no donation link: this instance is not for people.
+  enable_metrics: false
+  donation_url: false
+  # The wikipedia engine refuses to load without a contact address (it sends it in its
+  # User-Agent). This instance is internal-only; `.invalid` is a reserved placeholder TLD.
+  contact_url: "mailto:noreply@example.invalid"
+
+search:
+  safe_search: 0
+  # No autocomplete and no favicon lookups: the bot sends plain queries and reads JSON only.
+  autocomplete: ""
+  favicon_resolver: ""
+  formats:
+    - html
+    - json
+
+server:
+  # Placeholder: searched-for value is generated when deploying, see tools/README.md.
+  # Never commit a real key — it signs this instance's session cookie.
+  secret_key: "REPLACE_ME_AT_DEPLOY"
+  # Not a public instance, no rate limiter (that needs a valkey/redis container).
+  limiter: false
+  public_instance: false
+  image_proxy: false
+  method: "GET"
+
+ui:
+  # Keep the query out of page titles (privacy); the UI is not used by anyone.
+  query_in_title: false
+  default_theme: simple
+  center_alignment: false
+
+outgoing:
+  request_timeout: 5.0
+  max_request_timeout: 10.0
+  useragent_suffix: ""
+  # Every outbound request goes through the egress proxy. Rules per source address live in
+  # egress/squid.conf; 172.30.0.22 is in egress/squid.tools.snippet.conf.
+  proxies:
+    all://:
+      - http://egress:3128

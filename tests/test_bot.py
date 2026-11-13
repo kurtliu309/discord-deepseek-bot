@@ -1,6 +1,8 @@
 import unittest
+from pathlib import Path
 
 import bot
+import guildcfg
 
 
 class FakeRNG:
@@ -189,17 +191,30 @@ class TestFxTopic(unittest.TestCase):
             self.assertFalse(bot.is_fx_topic(s), s)
 
 
-class TestFxTopicConfig(unittest.TestCase):
+class TestGlobalConfig(unittest.TestCase):
+    """v3: process-wide settings only; per-guild knobs moved into config.yaml."""
+
     def _config(self, extra=None):
         env = {"DISCORD_BOT_TOKEN": "t", "DEEPSEEK_API_KEY": "k", "OWNER_USER_ID": "1"}
         env.update(extra or {})
         return bot.load_config(env)
 
-    def test_default(self):
-        self.assertEqual(self._config().fx_topic_chance, 0.05)
+    def test_defaults(self):
+        cfg = self._config()
+        self.assertEqual(cfg.model, "deepseek-flash")
+        self.assertEqual(cfg.data_dir, "/data")
+        self.assertEqual(Path(cfg.guilds_dir), Path(cfg.data_dir) / "guilds")
+        self.assertEqual(Path(cfg.personas_dir), Path(cfg.data_dir) / "shared" / "personas")
+        self.assertEqual(cfg.context_messages, 12)
 
     def test_override(self):
-        self.assertEqual(self._config({"FX_TOPIC_CHANCE": "0.1"}).fx_topic_chance, 0.1)
+        cfg = self._config(
+            {"DATA_DIR": "/srv/data", "CONTEXT_MESSAGES": "20", "DEEPSEEK_MODEL": "m"}
+        )
+        self.assertEqual(cfg.data_dir, "/srv/data")
+        self.assertEqual(Path(cfg.guilds_dir), Path(cfg.data_dir) / "guilds")
+        self.assertEqual(cfg.context_messages, 20)
+        self.assertEqual(cfg.model, "m")
 
 
 class TestDevCharge(unittest.TestCase):
@@ -256,7 +271,8 @@ class TestSanitizeOutput(unittest.TestCase):
 
 class TestRulesCard(unittest.TestCase):
     def test_no_ids(self):
-        cfg = bot.Config("t", "k", 123456789012345678, blocked_channel_names=["general"])
+        # v3: the card is built from the guild config (Assertions unchanged from v2).
+        cfg = guildcfg.GuildConfig(name="g")
         card = bot.build_rules_card(cfg, remaining=5, blocked_names=["general"])
         self.assertNotRegex(card, r"\d{15,}")
         self.assertIn("general", card)

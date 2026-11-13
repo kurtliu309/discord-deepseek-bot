@@ -1,4 +1,4 @@
-# Discord <-> DeepSeek chat bot (v2, see docs/notes/design-v2.md). Chat only: the model has no tools.
+# Discord <-> DeepSeek chat bot (v3, see docs/notes/design-v3.md). Chat only: the model has no tools.
 #
 #   bot, scheduler (hold secrets) --botnet--> egress (Squid) --egress_net--> Discord + api.deepseek.com only
 #   fetcher (NO secrets)          --botnet--> egress (Squid) --egress_net--> any public host (443)
@@ -6,7 +6,9 @@
 #
 # Isolation rules (do not relax): no ports, no docker socket, not privileged, non-root,
 # read-only root fs, all capabilities dropped, everything on `botnet` only (egress also on
-# egress_net). The ONLY mount is ./data -> scheduler:/data (group profile + recaps).
+# egress_net). Mounts (v3, Kurt approved 2026-11-14): scheduler gets ./data -> /data (rw);
+# bot gets ./data/guilds -> /data/guilds (rw, /setup writes configs) and
+# ./data/shared -> /data/shared (ro, persona library + news material). Nothing else.
 # Addresses on botnet are pinned because egress/squid.conf applies rules per source address.
 
 name: discord-deepseek-bot
@@ -79,9 +81,24 @@ services:
       - .env
     environment:
       <<: *proxy-env
+      DATA_DIR: /data
     user: "10001:10001"
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    # v3: per-guild configs (rw, /setup writes here) + the shared persona/news library (ro).
+    volumes:
+      - type: bind
+        source: ./data/guilds
+        target: /data/guilds
+        read_only: false
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ./data/shared
+        target: /data/shared
+        read_only: true
+        bind:
+          create_host_path: true
     mem_limit: 256m
     memswap_limit: 256m
     cpus: 0.5
@@ -110,7 +127,8 @@ services:
     user: "10001:10001"
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
-    # The single allowed mount (design-v2): group profile + last 10 recaps. Nothing else.
+    # Per-guild configs, profile blocks, material and the last 10 recaps (design-v3 §1).
+    # Whole ./data so the scheduler can also read data/shared/personas; nothing else is mounted.
     volumes:
       - type: bind
         source: ./data

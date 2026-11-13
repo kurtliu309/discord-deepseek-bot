@@ -106,9 +106,55 @@ quiet_channels: []
 3. **退群**：bot 离开 → 那个群的文件夹移进 `.trash`，Kurt 确认后再删。
 4. **体检**（每周）：bot 在哪些群、配置缺项、记忆超长、“在群里没配置”或“有配置不在群里”。
 
-## 待定
+## 8. 人设库（模块化）
 
-- 头脑警察的人设：乌龟（有点丧、想出去玩、像在打字、说不完就分几条）还是旧人设。
-- 信任等级 owner / public 两档够不够。
-- 先查有没有现成框架能替代（多群配置、权限、`/setup`、LLM 工具调用），再出实现计划。
-- news-pipeline 的去留：Horizon、`fetch-and-summarize` 保留；`bot.py`、`push.py`、子代理、Kurt News 应用预计退役。
+```
+data\shared\personas\
+├─ _base.md          底线：所有人设共用，只有 Kurt 能改（改前先问 Kurt）
+├─ tiredfx\          旧人设（TiredFX Guy）：character.md、examples.md
+├─ turtle\           乌龟：有点丧、想出去玩
+└─ _styles\          打字风格，任何人设都能配：chatty.md（短句、分几条发）、normal.md
+```
+
+- 群配置里选：`persona`、`style`、`language`、`nickname`。系统提示拼接顺序：底线 → 人设 → 风格 → 群补充。
+- 只读挂进容器，改了重新加载即可，不用重建镜像。聊天、总结、话题、新闻开场共用同一份人设。
+- 迁移：`prompts/default.txt` 拆成 `_base.md` + `tiredfx/character.md`（底线部分逐条给 Kurt 过目）；乌龟从 `news-pipeline\prompts\reply.md` 搬来，打字节奏从 `news-pipeline\bot.py` 的 `split_turns`/`typing_delay` 搬来做 `chatty`。
+
+## 9. 信任等级到底信任什么
+
+信任的是**群里所有能发消息的人**。区别只有一条：**模型能不能自己动手找东西**（搜索、打开任意链接、读视频；下一轮还有读本机指定文件夹）。能找东西就可能被群里的人利用（藏指令的网页、烧余额），所以只给 owner 群。
+
+- 抓取永远是代码在做；变的是“抓什么由谁定”：每日新闻 = 配置写死；`read_links` = 群里的人贴了什么；`tools` = 模型提请求、代码按白名单和上限执行。
+- 2026-11-14 Kurt 定：owner 群**放开**（能搜、能打开任何链接），靠白名单 + 次数上限把关。只做 owner / public 两档，配置格式预留以后加档。
+
+## 10. 工具走 MCP
+
+```
+bot（有密钥，白名单不变）── MCP 内部 HTTP ──▶ tools 容器（无密钥，新增）
+                                              ├─ search     → SearXNG 容器（新增）
+                                              ├─ read_page  → 复用 fetcher.py
+                                              └─ read_video → 复用 fetch_video.py 的字幕路径
+tools / SearXNG 出网只经 egress：公网 443，私网和本机照拦
+```
+
+- 一次提问：bot 查群配置决定请求带不带工具 → DeepSeek 发起工具调用 → bot 检查次数（≤4 轮）、白名单、累计字数 → 交给 tools 容器 → 结果塞回 → 直到最终回答。每轮工具调用计入当天余额。
+- 三道把关：bot 发请求前、bot 每次调用前、tools 容器执行时（带群 ID 再查一次）。
+- MCP 服务器自己写一个薄的（官方 Python SDK 的 FastMCP），直接调已有代码；不装三个现成 MCP（各自要桥接 stdio、过代理，容器太多）。接口标准，以后可替换。
+- 下一轮读本机文件夹：官方 filesystem MCP，单独容器，只读挂载指定目录。
+- **要 Kurt 同意**：新增 tools、SearXNG 两个容器及其 egress 规则；bot/scheduler 白名单不变。
+
+## 11. 现成方案调研（2026-11-14）
+
+- 整套替代：LangBot（约 1.9 万★，Discord、DeepSeek、工具、MCP、插件、访问控制）最接近，但没有定时推送和按群记忆的说明，现有功能要当插件重写，且会失去容器隔离；TomoriBot（按服务器 `/config`、SearXNG、MCP）太小、TypeScript、记忆跨服务器；Red-DiscordBot 要整体改写成 cog。**都不整套替换。**
+- 直接复用的零件：MCP 作工具接口、SearXNG、Horizon、discord.py 自带的命令权限和仅你可见消息、Pydantic 校验配置。
+- 已做完可复用（2026-11-13）：hub skill `fetch-and-summarize`（30 个测试，字幕/Whisper/网页）、Horizon（已配 DeepSeek）、`news-pipeline\fetch.py` 的解析和去重（改成按群）、打字节奏。退役：`news-pipeline` 的 `bot.py` 主体、`push.py`、`news-agent.ps1`、Kurt News 应用。
+- `fetch_video.py` 按 Windows 写（AppData 的 ffmpeg、显卡 DLL），进 Linux 容器只搬字幕路径；Whisper 转写留在主机，下一轮再接（要在 fetcher 的“禁止本机”规则上开一个端口口子，需 Kurt 同意）。
+
+## 已定
+
+- 头脑警察：`persona: tiredfx`（旧人设），`trust: owner`。
+- 信任等级 owner / public 两档；owner 群工具放开。
+
+## 待定（进计划模式 grill）
+
+- 实现分批、并行方式、每批的验收。

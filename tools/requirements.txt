@@ -1,0 +1,7 @@
+# Runtime deps for tools/server.py (read-only MCP tools container).
+# Pinned for reproducible builds, same policy as ../requirements.txt.
+# mcp 1.x: FastMCP lives in mcp.server.fastmcp (2.x renamed it to MCPServer), keep <2.
+mcp==1.30.0
+httpx==0.28.1
+# read_video: metadata + public subtitles only, no ffmpeg and no ASR deps on purpose.
+yt-dlp==2026.10.26

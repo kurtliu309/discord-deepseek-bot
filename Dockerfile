@@ -17,6 +17,8 @@ COPY requirements.txt ./
 RUN pip install -r requirements.txt
 
 COPY bot.py scheduler.py fetcher.py ./
+# v3 modules: per-guild config, persona library, per-guild memory, /setup UI, v2 -> v3 migration.
+COPY guildcfg.py persona.py guildmem.py setup_ui.py migrate_v3.py ./
 COPY prompts/ ./prompts/
 
 # App code is root-owned and read-only for the runtime user. At runtime the root fs is

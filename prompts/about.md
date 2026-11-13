@@ -9,6 +9,20 @@ behaviour changes (bot.py, scheduler.py, fetcher.py, docker-compose.yml, egress/
 Newest first. Same as the "What's new" box on the guide page. When asked what changed or
 what's new, answer from this list.
 
+- **v3.0 · 2026-11-14**
+  - Every setting is now per server, in `data/guilds/<server id>/config.yaml`: persona,
+    style, language, feature switches, channels, times, feeds, reply budget. A server
+    without a valid config gets no replies at all; the owner is told once to run `/setup`.
+  - New `/setup` (owner only, private replies): trust level, persona, style, language,
+    budgets, jump-in settings, quiet channels, recap/topics, consent.
+  - Persona library in `data/shared/personas/`: shared floor + character + typing style,
+    hot reloaded without a restart. Ships a second persona (turtle) and a chatty style.
+  - Per-server memory: the profile is split into blocks the bot rewrites one at a time
+    each night (the hand-written Kurt block is never touched); recaps, the reply budget
+    and the daily material are per server too.
+  - The scheduler works per server: each one gets its recap and topics at its own time,
+    in its own channel, from its own feed list. A server that hasn't consented is never
+    read or summarised.
 - **v2.2 · 2026-11-13**
   - Persona: same doomer, now a senior film VFX artist of many years: strong on tech,
     loves movies, worn out by overtime.

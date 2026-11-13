@@ -1,0 +1,38 @@
+# SearXNG settings for the LOCAL TEST stack only (tools/docker-compose.test.yml).
+# Same as ../../searxng/settings.yml, minus `outgoing.proxies`: the test stack talks to the
+# internet directly (no egress container). Never use this file in the real stack.
+use_default_settings:
+  engines:
+    keep_only:
+      - duckduckgo
+      - bing
+      - brave
+      - wikipedia
+      - github
+
+general:
+  instance_name: "ddb-search-test"
+  enable_metrics: false
+  donation_url: false
+  # The wikipedia engine refuses to load without a contact address.
+  contact_url: "mailto:noreply@example.invalid"
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  favicon_resolver: ""
+  formats:
+    - html
+    - json
+
+server:
+  secret_key: "test-only-not-a-secret"
+  limiter: false
+  public_instance: false
+  image_proxy: false
+  method: "GET"
+
+ui:
+  query_in_title: false
+  default_theme: simple
+  center_alignment: false

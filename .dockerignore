@@ -4,5 +4,10 @@
 !bot.py
 !scheduler.py
 !fetcher.py
+!guildcfg.py
+!persona.py
+!guildmem.py
+!setup_ui.py
+!migrate_v3.py
 !prompts/
 !prompts/**
