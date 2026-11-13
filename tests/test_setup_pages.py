@@ -497,3 +497,21 @@ class TestChannelSelectsKeepPicks(unittest.IsolatedAsyncioTestCase):
             selects = [i for i in view.children if isinstance(i, discord.ui.ChannelSelect)]
             for s in selects:
                 self.assertEqual(list(s.default_values), [])
+
+
+class TestDiscordTextLimits(unittest.TestCase):
+    """Discord rejects the whole modal/view (400) when one label is too long."""
+
+    def test_modal_titles_and_field_labels_fit(self):
+        for lang, table in setup_ui.TEXT.items():
+            for key, text in table.items():
+                if key.startswith(("field_", "modal_")):
+                    self.assertLessEqual(len(text), 45, f"{lang}.{key}: {text!r}")
+
+    def test_buttons_and_placeholders_fit(self):
+        for lang, table in setup_ui.TEXT.items():
+            for key, text in table.items():
+                if key.startswith("btn_"):
+                    self.assertLessEqual(len(text), 80, f"{lang}.{key}")
+                if key.endswith("_placeholder") or key.startswith("select_"):
+                    self.assertLessEqual(len(text), 150 - 60, f"{lang}.{key}")  # room for {channel}
