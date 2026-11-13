@@ -109,8 +109,13 @@ def check_hhmm(value):
 
 OnOff = Annotated[bool, BeforeValidator(as_bool)]
 ChannelId = Annotated[int, BeforeValidator(as_int)]
+UserId = Annotated[int, BeforeValidator(as_int)]
 HHMM = Annotated[str, AfterValidator(check_hhmm)]
 AllowDomains = Union[Literal["any"], list[str]]
+
+# List fields that hold Discord user IDs. The owner is never written into these:
+# they are always blocked from being blocked and always an admin, in code.
+USER_LIST_FIELDS = ("blocked_users", "admins")
 
 
 # --------------------------------------------------------------------------- #
@@ -258,6 +263,10 @@ class GuildConfig(BaseModel):
     allowed_channels: Optional[list[ChannelId]] = None  # None = every channel
     quiet_channels: list[ChannelId] = Field(default_factory=list)  # old BLOCKED_CHANNEL_IDS
     recap_skip_channels: list[ChannelId] = Field(default_factory=list)
+    # People the bot ignores in this guild, and extra people allowed to run /setup.
+    # The owner is never stored here (code keeps the owner unblockable and always admin).
+    blocked_users: list[UserId] = Field(default_factory=list)
+    admins: list[UserId] = Field(default_factory=list)
     features: Features = Field(default_factory=Features)
 
     @model_validator(mode="before")
@@ -341,6 +350,59 @@ def channel_allowed(cfg: Optional[GuildConfig], channel_id) -> bool:
 def channel_quiet(cfg: Optional[GuildConfig], channel_id) -> bool:
     """Quiet channels (and their parent category; the caller walks up)."""
     return cfg is not None and int(channel_id) in cfg.quiet_channels
+
+
+# --------------------------------------------------------------------------- #
+# owner / admins / blacklist
+#
+# Both lists are plain stored config, but the owner is special: an owner ID that
+# sneaks into a hand-edited file is ignored, so the owner can never be blocked and
+# is always allowed to run /setup. /setup never writes the owner into either list.
+# --------------------------------------------------------------------------- #
+
+
+def is_owner(user_id, owner_id) -> bool:
+    return owner_id is not None and int(user_id) == int(owner_id)
+
+
+def is_blocked(cfg: Optional[GuildConfig], user_id, owner_id=None) -> bool:
+    """True when the bot should ignore this person's messages in the guild."""
+    if cfg is None or user_id is None or is_owner(user_id, owner_id):
+        return False
+    return int(user_id) in cfg.blocked_users
+
+
+def is_admin(cfg: Optional[GuildConfig], user_id, owner_id=None) -> bool:
+    """True for the bot's owner and for anyone in the guild's ``admins`` list."""
+    if user_id is None:
+        return False
+    if is_owner(user_id, owner_id):
+        return True
+    return cfg is not None and int(user_id) in cfg.admins
+
+
+def without_owner(ids, owner_id=None) -> list[int]:
+    """The IDs minus the owner (hand-edited files ignore the owner in both lists)."""
+    return [
+        int(i)
+        for i in dict.fromkeys(int(i) for i in ids or [])
+        if not is_owner(i, owner_id)
+    ]
+
+
+def strip_owner(cfg: GuildConfig, owner_id=None) -> GuildConfig:
+    """The same config with the owner removed from ``blocked_users`` and ``admins``.
+
+    Used on load (a hand-edited file that lists the owner is quietly ignored) and
+    before saving. Returns the original object when there is nothing to change.
+    """
+    if owner_id is None:
+        return cfg
+    blocked = without_owner(cfg.blocked_users, owner_id)
+    admins = without_owner(cfg.admins, owner_id)
+    if blocked == cfg.blocked_users and admins == cfg.admins:
+        return cfg
+    return cfg.model_copy(update={"blocked_users": blocked, "admins": admins})
 
 
 def dm_config(name: str = "direct messages") -> GuildConfig:
@@ -450,11 +512,20 @@ class GuildConfigStore:
     it only touches the disk once per ``interval`` seconds.
     """
 
-    def __init__(self, guilds_dir, interval: float = 30.0, clock=time.monotonic, logger=None):
+    def __init__(
+        self,
+        guilds_dir,
+        interval: float = 30.0,
+        clock=time.monotonic,
+        logger=None,
+        owner_id=None,
+    ):
         self.guilds_dir = Path(guilds_dir)
         self.interval = interval
         self.clock = clock
         self.log = logger or _log_default
+        # When set, the owner is dropped from blocked_users/admins as files load.
+        self.owner_id = owner_id
         self._configs: dict[str, GuildConfig] = {}
         self._invalid: dict[str, str] = {}
         self._mtimes: dict[str, int] = {}
@@ -515,7 +586,7 @@ class GuildConfigStore:
                 self.log(f"guild {guild_id}: config.yaml rejected, guild treated as not set up: {e}")
                 continue
             self._invalid.pop(guild_id, None)
-            self._configs[guild_id] = cfg
+            self._configs[guild_id] = strip_owner(cfg, self.owner_id)
         for guild_id in list(self._configs):
             if guild_id not in seen:
                 self._configs.pop(guild_id, None)
@@ -533,6 +604,7 @@ class GuildConfigStore:
     def save(self, guild_id, cfg: GuildConfig) -> Path:
         """Save a guild's config atomically and put it in the cache right away."""
         guild_id = str(guild_id)
+        cfg = strip_owner(cfg, self.owner_id)
         path = write_config(self.guilds_dir / guild_id / "config.yaml", cfg)
         self._configs[guild_id] = cfg
         self._invalid.pop(guild_id, None)

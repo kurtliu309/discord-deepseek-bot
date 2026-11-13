@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""``/setup``: the owner-only, ephemeral settings UI for one guild (Chinese / English).
+"""``/setup``: the owner-or-admin, ephemeral settings UI for one guild (Chinese / English).
 
+The owner can change everything; a guild admin can change everything except the
+trust level and the admin list (enforced here on save, not just hidden in the UI).
 The Discord pieces (View / Select / Button / Modal) live at the bottom; everything
 above them is pure and unit-tested:
 
-    permission_error(user_id, owner_id, has_manage_guild, lang) -> None | error text
+    permission_error(user_id, owner_id, has_manage_guild, lang, admins) -> None | error
     default_config(guild_name)                                 -> GuildConfig
-    form_from_config(cfg) / apply_form(base, form)             -> editable form / validated config
+    form_from_config(cfg) / apply_form(base, form, ...)        -> editable form / validated config
+    config_diff(old, new) / change_notice(...)                 -> owner DM after a save
     list_personas / list_styles / tools_available / tools_status
 
 Every user-facing string lives in ``TEXT``; ``t(lang, key, **kw)`` picks it out.
@@ -52,7 +55,16 @@ TEXT = {
         "tools_line": "工具调用：{status}",
         "tools_ok": "可用（owner 群）",
         "tools_unavailable": "不可用（public 群不能开）",
-        "page_hint": "第 1 页改基础项；第 2 页改频道、定时和默认语言。改完点「保存」立即生效。",
+        "page_hint": "第 1 页改基础项；第 2 页改频道和定时；第 3 页改名单和默认语言。改完点「保存」立即生效。",
+        "blocked_line": "黑名单：{names}",
+        "admins_line": "管理员：{names}",
+        "owner_only": "只有主人能改",
+        "owner_only_line": "信任等级和管理员名单只有主人能改。",
+        "select_blocked": "黑名单（不回复这些人的消息）",
+        "select_admins": "管理员（可以改设置）",
+        "btn_members": "成员名单",
+        "dm_changed_header": "{guild} 的设置被 {user} 改了：",
+        "unknown_user": "<未知用户>",
         "on": "开",
         "off": "关",
         "none": "无",
@@ -95,7 +107,7 @@ TEXT = {
         "err_percent": "概率要在 0-100 之间（百分比）",
         "err_time": "时间要写成 HH:MM，例如 22:00",
         "perm_no_manage": "你需要「管理服务器」权限才能用 /setup。",
-        "perm_not_owner": "只有 bot 的主人能用 /setup。",
+        "perm_not_owner": "只有 bot 的主人或本群管理员能用 /setup。",
         "dm_only": "只能在服务器里用 /setup；私信不用设置。",
         "saved": "已保存，立即生效。",
         "cancelled": "已取消，什么都没改。",
@@ -119,8 +131,17 @@ TEXT = {
         "tools_line": "Tool calls: {status}",
         "tools_ok": "available (owner server)",
         "tools_unavailable": "unavailable (public servers cannot enable it)",
-        "page_hint": "Page 1: basics. Page 2: channels, schedules and the language. "
+        "page_hint": "Page 1: basics. Page 2: channels and schedules. Page 3: lists and the language. "
         "Press Save to apply.",
+        "blocked_line": "Blocked: {names}",
+        "admins_line": "Admins: {names}",
+        "owner_only": "Only the owner can change this",
+        "owner_only_line": "Only the owner can change the trust level and the admin list.",
+        "select_blocked": "Blocked users (I won't reply to them)",
+        "select_admins": "Admins (can change settings)",
+        "btn_members": "Members",
+        "dm_changed_header": "{guild}'s settings were changed by {user}:",
+        "unknown_user": "unknown user",
         "on": "on",
         "off": "off",
         "none": "none",
@@ -163,7 +184,7 @@ TEXT = {
         "err_percent": "The chance must be between 0 and 100 (percent).",
         "err_time": "Time must be HH:MM, e.g. 22:00.",
         "perm_no_manage": "You need the Manage Server permission to use /setup.",
-        "perm_not_owner": "Only the bot's owner can use /setup.",
+        "perm_not_owner": "Only the bot's owner or a server admin can use /setup.",
         "dm_only": "/setup only works inside a server; DMs need no setup.",
         "saved": "Saved; it takes effect now.",
         "cancelled": "Cancelled; nothing was changed.",
@@ -214,11 +235,23 @@ def trust_label(lang: str, trust) -> str:
 # --------------------------------------------------------------------------- #
 
 
-def permission_error(user_id, owner_id, has_manage_guild: bool, lang: str = DEFAULT_LANGUAGE):
-    """Why this user may not use /setup, or ``None`` when they may."""
+def permission_error(
+    user_id,
+    owner_id,
+    has_manage_guild: bool,
+    lang: str = DEFAULT_LANGUAGE,
+    admins=(),
+):
+    """Why this user may not use /setup, or ``None`` when they may.
+
+    The owner always may; anyone in the guild's ``admins`` list may too, as long as
+    they also have Manage Server (the slash command's own default permission).
+    """
     if not has_manage_guild:
         return t(lang, "perm_no_manage")
-    if int(user_id) != int(owner_id):
+    if not g.is_admin(None, user_id, owner_id) and int(user_id) not in {
+        int(a) for a in admins or ()
+    }:
         return t(lang, "perm_not_owner")
     return None
 
@@ -320,6 +353,8 @@ class SetupForm:
     topics_channel: int | None = None
     topics_time: str = "09:00"
     consent: bool = False
+    blocked_users: list = field(default_factory=list)
+    admins: list = field(default_factory=list)
 
 
 def form_from_config(cfg: g.GuildConfig) -> SetupForm:
@@ -342,23 +377,41 @@ def form_from_config(cfg: g.GuildConfig) -> SetupForm:
         topics_channel=cfg.features.topics.channel,
         topics_time=cfg.features.topics.time,
         consent=bool(cfg.consent),
+        blocked_users=list(cfg.blocked_users),
+        admins=list(cfg.admins),
     )
 
 
-def apply_form(base: g.GuildConfig, form: SetupForm) -> g.GuildConfig:
+def apply_form(
+    base: g.GuildConfig,
+    form: SetupForm,
+    *,
+    is_owner: bool = True,
+    owner_id=None,
+) -> g.GuildConfig:
     """Merge the form into ``base`` (keeping fields the menu doesn't show) and validate.
 
     Raises ``guildcfg.ConfigError`` on bad values. A guild that is downgraded to
     public gets ``tools`` switched off: the level ceiling would ignore it anyway,
     and the saved file should not claim otherwise.
+
+    Only the owner may change ``trust`` and ``admins``. The menu greys those out for
+    admins, but the values are forced back here too, so hiding the controls is not
+    the security boundary. The owner is never written into either name list.
     """
     data = base.model_dump(mode="json")
-    data["trust"] = form.trust
     data["persona"] = form.persona
     data["style"] = form.style
     data["language"] = form.language
     data["consent"] = bool(form.consent)
     data["quiet_channels"] = [int(c) for c in form.quiet_channels]
+    data["blocked_users"] = g.without_owner(form.blocked_users, owner_id)
+    if is_owner:
+        data["trust"] = form.trust
+        data["admins"] = g.without_owner(form.admins, owner_id)
+    else:
+        data["trust"] = str(base.trust)
+        data["admins"] = g.without_owner(base.admins, owner_id)
 
     data["budget"]["replies_per_day"] = int(form.replies_per_day)
     data["budget"]["replies_per_user"] = int(form.replies_per_user)
@@ -378,15 +431,23 @@ def apply_form(base: g.GuildConfig, form: SetupForm) -> g.GuildConfig:
         block["channel"] = int(channel) if channel is not None else None
         block["time"] = time_value
 
-    if not tools_available(form.trust):
+    if not tools_available(data["trust"]):
         data["features"]["tools"]["on"] = False
 
     return g.parse_config(data)
 
 
-def save_form(store, guild_id, base: g.GuildConfig, form: SetupForm) -> g.GuildConfig:
+def save_form(
+    store,
+    guild_id,
+    base: g.GuildConfig,
+    form: SetupForm,
+    *,
+    is_owner: bool = True,
+    owner_id=None,
+) -> g.GuildConfig:
     """Validate + write config.yaml; the store cache updates immediately."""
-    cfg = apply_form(base, form)
+    cfg = apply_form(base, form, is_owner=is_owner, owner_id=owner_id)
     store.save(guild_id, cfg)
     return cfg
 
@@ -399,25 +460,172 @@ def save_setup_language(store, guild_id, base: g.GuildConfig, lang: str) -> g.Gu
 
 
 # --------------------------------------------------------------------------- #
+# change notification (pure diff; the Discord side only supplies names + sends)
+# --------------------------------------------------------------------------- #
+
+UNKNOWN_USER = "<未知用户>"
+
+
+def _flatten(data: dict, prefix: str = "") -> dict:
+    out = {}
+    for key, value in data.items():
+        path = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            out.update(_flatten(value, path))
+        else:
+            out[path] = value
+    return out
+
+
+def _short_path(path: str) -> str:
+    """Feature blocks read ``interject.chance`` in the notice, not ``features.interject.chance``."""
+    return path[len("features."):] if path.startswith("features.") else path
+
+
+def _format_value(value) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, float):
+        return f"{value:.2f}"
+    if value is None:
+        return "none"
+    if isinstance(value, list):
+        return ", ".join(_format_value(v) for v in value) if value else "none"
+    return str(value)
+
+
+def _name_of(user_id, names, unknown) -> str:
+    name = None
+    if callable(names):
+        name = names(int(user_id))
+    elif isinstance(names, dict):
+        name = names.get(int(user_id), names.get(str(user_id)))
+    return str(name) if name else unknown
+
+
+def _user_list_change(old_ids, new_ids, names, unknown) -> str:
+    old_ids = [int(i) for i in old_ids or []]
+    new_ids = [int(i) for i in new_ids or []]
+    parts = [f"+ {_name_of(i, names, unknown)}" for i in new_ids if i not in old_ids]
+    parts += [f"- {_name_of(i, names, unknown)}" for i in old_ids if i not in new_ids]
+    return ", ".join(parts)
+
+
+def config_diff(
+    old: g.GuildConfig,
+    new: g.GuildConfig,
+    *,
+    user_name=None,
+    unknown: str = UNKNOWN_USER,
+    owner_id=None,
+) -> list:
+    """Flat field changes between two guild configs: ``[(path, change_text), ...]``.
+
+    Scalars render as ``"old → new"``. Name lists (``blocked_users`` / ``admins``)
+    render as ``"+ Alice, - Bob"``: the owner DM shows names, never raw user IDs,
+    and falls back to ``unknown`` when a name cannot be looked up. The owner is
+    ignored in both lists (the owner can never actually be blocked or removed).
+    """
+    before = _flatten(old.model_dump(mode="json"))
+    after = _flatten(new.model_dump(mode="json"))
+    changes = []
+    for path, old_value in before.items():
+        if path not in after:
+            continue
+        new_value = after[path]
+        if path in g.USER_LIST_FIELDS:
+            old_ids = [int(i) for i in old_value or [] if not g.is_owner(i, owner_id)]
+            new_ids = [int(i) for i in new_value or [] if not g.is_owner(i, owner_id)]
+            if old_ids == new_ids:
+                continue
+            text = _user_list_change(old_ids, new_ids, user_name, unknown)
+            if text:
+                changes.append((_short_path(path), text))
+        elif old_value != new_value:
+            changes.append(
+                (_short_path(path), f"{_format_value(old_value)} → {_format_value(new_value)}")
+            )
+    return changes
+
+
+def change_notice(
+    old: g.GuildConfig,
+    new: g.GuildConfig,
+    *,
+    guild_name: str,
+    actor_name: str,
+    lang: str = DEFAULT_LANGUAGE,
+    user_name=None,
+    owner_id=None,
+):
+    """The owner DM after a successful save, or ``None`` when nothing changed."""
+    changes = config_diff(
+        old,
+        new,
+        user_name=user_name,
+        unknown=t(lang, "unknown_user"),
+        owner_id=owner_id,
+    )
+    if not changes:
+        return None
+    lines = [f"- {path}: {text}" for path, text in changes]
+    header = t(lang, "dm_changed_header", guild=guild_name, user=actor_name)
+    return "\n".join([header] + lines)
+
+
+def display_name(user) -> str:
+    return (
+        getattr(user, "display_name", None)
+        or getattr(user, "name", None)
+        or "someone"
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Discord UI (thin: edit the form, save with the pure helpers above)
 # --------------------------------------------------------------------------- #
 
 
 class SetupView(discord.ui.View):
-    """Two ephemeral pages; every change edits the same message in place.
+    """Three ephemeral pages; every change edits the same message in place.
 
-    Discord allows five action rows per message, so page 1 is three selects plus
-    a button row and the language toggle, and page 2 is four selects plus one row
-    holding its buttons (the toggle included).
+    Discord allows five action rows and five buttons per row, so page 1 is three
+    selects plus a button row and the language toggle, page 2 is three channel
+    selects plus a five-button row and the toggle, and page 3 is the two member
+    lists, the language select, a button row and the toggle.
+
+    ``is_owner`` gates the two owner-only controls (trust level and the admin
+    list): they are disabled for admins and forced back on save anyway.
     """
 
-    def __init__(self, *, guild, base, form, store, personas_dir):
+    def __init__(
+        self,
+        *,
+        guild,
+        base,
+        form,
+        store,
+        personas_dir,
+        owner_id=None,
+        actor_id=None,
+        notify_owner=None,
+    ):
         super().__init__(timeout=600)
         self.guild = guild
         self.base = base
         self.form = form
         self.store = store
         self.personas_dir = personas_dir
+        self.owner_id = owner_id
+        self.actor_id = actor_id
+        self.notify_owner = notify_owner
+        # start_setup always passes both; a programmatic view without an actor is
+        # treated as the owner (tests build views that way).
+        self.is_owner = (
+            owner_id is None
+            or actor_id is None
+            or int(actor_id) == int(owner_id)
+        )
         self.personas = list_personas(personas_dir) or [form.persona]
         self.styles = list_styles(personas_dir) or [form.style]
         self.setup_language = ui_language(getattr(base, "setup_language", DEFAULT_LANGUAGE))
@@ -438,6 +646,37 @@ class SetupView(discord.ui.View):
         if not ids:
             return t(lang, "none")
         return t(lang, "join").join(self._channel_name(cid) for cid in ids)
+
+    def _member(self, user_id):
+        getter = getattr(self.guild, "get_member", None) if self.guild is not None else None
+        if getter is None:
+            return None
+        try:
+            return getter(int(user_id))
+        except Exception:
+            return None
+
+    def _user_name(self, user_id) -> str:
+        member = self._member(user_id)
+        if member is None:
+            return t(self.setup_language, "unknown_user")
+        return display_name(member)
+
+    def _user_names(self, ids) -> str:
+        lang = self.setup_language
+        ids = g.without_owner(ids, self.owner_id)
+        if not ids:
+            return t(lang, "none")
+        return t(lang, "join").join(self._user_name(uid) for uid in ids)
+
+    def _default_members(self, ids):
+        """Members for a UserSelect's defaults; unknown/left users simply drop out.
+
+        Only real guild members are preselected: the select cannot show someone who
+        left the server (their name still appears in the text summary above).
+        """
+        members = [self._member(uid) for uid in g.without_owner(ids, self.owner_id)]
+        return [m for m in members if isinstance(m, (discord.User, discord.Member))][:25]
 
     def render(self) -> str:
         f = self.form
@@ -461,10 +700,13 @@ class SetupView(discord.ui.View):
             t(lang, "topics_line", state=flag(f.topics_on),
               channel=self._channel_name(f.topics_channel), time=f.topics_time),
             t(lang, "consent_line", state=t(lang, "consent_yes" if f.consent else "consent_no")),
+            t(lang, "blocked_line", names=self._user_names(f.blocked_users)),
+            t(lang, "admins_line", names=self._user_names(f.admins)),
             t(lang, "tools_line", status=tools_status(f.trust, lang)),
-            "",
-            t(lang, "page_hint"),
         ]
+        if not self.is_owner:
+            lines.append(t(lang, "owner_only_line"))
+        lines.extend(["", t(lang, "page_hint")])
         return "\n".join(lines)
 
     # -- page building ------------------------------------------------------ #
@@ -473,8 +715,10 @@ class SetupView(discord.ui.View):
         self.clear_items()
         if self.page == 1:
             self._page_one()
-        else:
+        elif self.page == 2:
             self._page_two()
+        else:
+            self._page_three()
 
     def _add_buttons(self, row, specs):
         """``specs`` = (text key, callback, primary?)"""
@@ -502,6 +746,7 @@ class SetupView(discord.ui.View):
         trust = discord.ui.Select(
             placeholder=t(lang, "select_trust"),
             row=0,
+            disabled=not self.is_owner,
             options=[
                 discord.SelectOption(
                     label=trust_label(lang, value), value=value, default=(value == f.trust)
@@ -580,9 +825,48 @@ class SetupView(discord.ui.View):
         topics.callback = self._on_topics_channel
         self.add_item(topics)
 
+        self._add_buttons(
+            3,
+            (
+                ("btn_recap", self._on_recap_settings, False),
+                ("btn_topics", self._on_topics_settings, False),
+                ("btn_consent", self._on_consent, False),
+                ("btn_members", self._on_members, False),
+                ("btn_back", self._on_back, False),
+            ),
+        )
+        self._add_language_button(4)
+
+    def _page_three(self):
+        f = self.form
+        lang = self.setup_language
+        blocked = discord.ui.UserSelect(
+            placeholder=t(lang, "select_blocked"),
+            row=0,
+            min_values=0,
+            max_values=25,
+            default_values=self._default_members(f.blocked_users) or None,
+        )
+        blocked.callback = self._on_blocked
+        self.add_item(blocked)
+
+        admins_placeholder = t(lang, "select_admins")
+        if not self.is_owner:
+            admins_placeholder = f"{admins_placeholder} — {t(lang, 'owner_only')}"
+        admins = discord.ui.UserSelect(
+            placeholder=admins_placeholder,
+            row=1,
+            min_values=0,
+            max_values=25,
+            disabled=not self.is_owner,
+            default_values=self._default_members(f.admins) or None,
+        )
+        admins.callback = self._on_admins
+        self.add_item(admins)
+
         language = discord.ui.Select(
             placeholder=t(lang, "select_language"),
-            row=3,
+            row=2,
             options=[
                 discord.SelectOption(label=label, value=code, default=(code == f.language))
                 for label, code in LANGUAGE_CHOICES
@@ -592,15 +876,14 @@ class SetupView(discord.ui.View):
         self.add_item(language)
 
         self._add_buttons(
-            4,
+            3,
             (
-                ("btn_recap", self._on_recap_settings, False),
-                ("btn_topics", self._on_topics_settings, False),
-                ("btn_consent", self._on_consent, False),
-                ("btn_back", self._on_back, False),
-                ("btn_language", self._on_switch_language, False),
+                ("btn_save", self._on_save, True),
+                ("btn_back", self._on_members_back, False),
+                ("btn_cancel", self._on_cancel, False),
             ),
         )
+        self._add_language_button(4)
 
     async def _show(self, interaction):
         self._build()
@@ -609,6 +892,9 @@ class SetupView(discord.ui.View):
     # -- select handlers ---------------------------------------------------- #
 
     async def _on_trust(self, interaction):
+        if not self.is_owner:
+            await self._show(interaction)  # disabled in the UI; ignore a forced callback
+            return
         self.form.trust = interaction.data["values"][0]
         await self._show(interaction)
 
@@ -638,6 +924,17 @@ class SetupView(discord.ui.View):
         self.form.topics_channel = int(values[0]) if values else None
         await self._show(interaction)
 
+    async def _on_blocked(self, interaction):
+        self.form.blocked_users = [int(v) for v in interaction.data.get("values", [])]
+        await self._show(interaction)
+
+    async def _on_admins(self, interaction):
+        if not self.is_owner:
+            await self._show(interaction)  # disabled in the UI; ignore a forced callback
+            return
+        self.form.admins = [int(v) for v in interaction.data.get("values", [])]
+        await self._show(interaction)
+
     # -- button handlers ---------------------------------------------------- #
 
     async def _on_switch_language(self, interaction):
@@ -663,6 +960,14 @@ class SetupView(discord.ui.View):
         self.page = 2
         await self._show(interaction)
 
+    async def _on_members(self, interaction):
+        self.page = 3
+        await self._show(interaction)
+
+    async def _on_members_back(self, interaction):
+        self.page = 2
+        await self._show(interaction)
+
     async def _on_back(self, interaction):
         self.page = 1
         await self._show(interaction)
@@ -684,14 +989,50 @@ class SetupView(discord.ui.View):
                 t(lang, "err_persona_missing", persona=self.form.persona), ephemeral=True
             )
             return
+        old = self.base
         try:
-            save_form(self.store, self.guild.id, self.base, self.form)
+            cfg = save_form(
+                self.store,
+                self.guild.id,
+                old,
+                self.form,
+                is_owner=self.is_owner,
+                owner_id=self.owner_id,
+            )
         except g.ConfigError as e:
             await interaction.response.send_message(t(lang, "err_save", error=e), ephemeral=True)
             return
+        self.base = cfg
+        # an admin's forced-back owner-only fields should not look changed on screen
+        self.form.trust = str(cfg.trust)
+        self.form.admins = list(cfg.admins)
+        self.form.blocked_users = list(cfg.blocked_users)
+        await self._notify_change(old, cfg, interaction.user, lang)
         await interaction.response.edit_message(
             content=t(lang, "saved") + "\n\n" + self.render(), view=None
         )
+
+    async def _notify_change(self, old, new, actor, lang) -> bool:
+        """DM the owner the changed fields; a failed DM is only logged."""
+        if self.notify_owner is None:
+            return False
+        notice = change_notice(
+            old,
+            new,
+            guild_name=getattr(self.guild, "name", "") or "this server",
+            actor_name=display_name(actor),
+            lang=lang,
+            user_name=self._user_name,
+            owner_id=self.owner_id,
+        )
+        if notice is None:
+            return False
+        try:
+            await self.notify_owner(notice)
+        except Exception as e:
+            print(f"[setup] could not DM owner: {type(e).__name__}: {e}", flush=True)
+            return False
+        return True
 
     async def _on_cancel(self, interaction):
         await interaction.response.edit_message(
@@ -836,7 +1177,7 @@ class TopicsModal(_ScheduleModal):
 # --------------------------------------------------------------------------- #
 
 
-async def start_setup(interaction, *, owner_id, store, personas_dir):
+async def start_setup(interaction, *, owner_id, store, personas_dir, notify_owner=None):
     """Validate /setup and show page 1. Never raises for a normal refusal."""
     if interaction.guild is None:
         await interaction.response.send_message(t(DEFAULT_LANGUAGE, "dm_only"), ephemeral=True)
@@ -846,8 +1187,11 @@ async def start_setup(interaction, *, owner_id, store, personas_dir):
     base = store.get(interaction.guild.id) or default_config(interaction.guild.name)
     # Refusals speak the guild's own /setup language; an unconfigured guild gets zh.
     error = permission_error(
-        interaction.user.id, owner_id, has_manage_guild(interaction),
+        interaction.user.id,
+        owner_id,
+        has_manage_guild(interaction),
         ui_language(getattr(base, "setup_language", DEFAULT_LANGUAGE)),
+        admins=getattr(base, "admins", ()),
     )
     if error:
         await interaction.response.send_message(error, ephemeral=True)
@@ -859,5 +1203,8 @@ async def start_setup(interaction, *, owner_id, store, personas_dir):
         form=form_from_config(base),
         store=store,
         personas_dir=personas_dir,
+        owner_id=owner_id,
+        actor_id=interaction.user.id,
+        notify_owner=notify_owner,
     )
     await interaction.response.send_message(view.render(), view=view, ephemeral=True)

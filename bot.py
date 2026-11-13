@@ -48,6 +48,8 @@ from guildcfg import (
     channel_quiet,
     dm_config,
     effective,
+    is_admin,
+    is_blocked,
     settings_for,
 )
 
@@ -769,6 +771,8 @@ def build_rules_card(
         f"you have {user_remaining}/{user_total}. refills at {hh:02d}:{mm:02d}{tz_txt}. "
         f"{owner_name} can /feed me early.",
         f"- quiet in: {blocked}.",
+        # The admin count only: names (and the blacklist) stay out of the public card.
+        f"- admins: {len(cfg.admins)} listed; they and {owner_name} can run /setup.",
         f"- jobs: {jobs_line}.",
         read_line,
         tools_line,
@@ -917,7 +921,9 @@ class Bot(discord.Client):
         super().__init__(intents=intents, proxy=os.environ["HTTPS_PROXY"])
 
         self.config = config
-        self.store = GuildConfigStore(config.guilds_dir, interval=30)
+        self.store = GuildConfigStore(
+            config.guilds_dir, interval=30, owner_id=config.owner_id
+        )
         self.personas_dir = config.personas_dir
         self.budgets = BudgetBook(config.tz)
         self.channel_activity = ChannelActivity()
@@ -955,7 +961,7 @@ class Bot(discord.Client):
         async def dev_cmd(interaction: discord.Interaction, question: Optional[str] = None):
             await self.dev(interaction, question)
 
-        @self.tree.command(name="setup", description="Set me up for this server (owner only).")
+        @self.tree.command(name="setup", description="Set me up for this server (owner or admin).")
         @app_commands.default_permissions(manage_guild=True)
         async def setup_cmd(interaction: discord.Interaction):
             await setup_ui.start_setup(
@@ -963,6 +969,7 @@ class Bot(discord.Client):
                 owner_id=self.config.owner_id,
                 store=self.store,
                 personas_dir=self.personas_dir,
+                notify_owner=self._dm_owner,
             )
 
     # -- startup / teardown ------------------------------------------------- #
@@ -1059,6 +1066,12 @@ class Bot(discord.Client):
         cfg = self.store.get(message.guild.id)
         if cfg is None:
             await self._notify_unconfigured(message.guild)
+            return
+
+        # Blocked people are invisible here: no mention replies, no interjections,
+        # and their messages never feed the burst counter. The owner is never blocked
+        # (is_blocked checks that in code, even if the YAML lists the owner).
+        if is_blocked(cfg, message.author.id, self.config.owner_id):
             return
 
         if not channel_active(cfg, message.channel):
@@ -1185,7 +1198,7 @@ class Bot(discord.Client):
                 owner = await self.fetch_user(self.config.owner_id)
             await owner.send(text)
         except Exception as e:
-            print(f"[bot] could not DM owner about the budget: {type(e).__name__}: {e}", flush=True)
+            print(f"[bot] could not DM owner: {type(e).__name__}: {e}", flush=True)
 
     def _queue_owner_dm(self, text) -> None:
         """Queue an owner DM from sync code (``try_charge_lookup``)."""
@@ -1515,12 +1528,12 @@ class Bot(discord.Client):
     async def feed(
         self, interaction: discord.Interaction, user: Optional[discord.Member] = None
     ):
-        """/feed refills this guild's counters: all of them, or just one member's."""
-        if interaction.user.id != self.config.owner_id:
-            await interaction.response.send_message("nope", ephemeral=True)
-            return
+        """/feed refills this guild's counters: the owner or a guild admin, all or one member's."""
         self.store.maybe_reload()
         key, cfg = guild_context(self.store, interaction)
+        if not is_admin(cfg, interaction.user.id, self.config.owner_id):
+            await interaction.response.send_message("nope", ephemeral=True)
+            return
         if cfg is None:
             await interaction.response.send_message(NOT_SET_UP, ephemeral=True)
             return
