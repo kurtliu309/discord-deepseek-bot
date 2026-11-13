@@ -159,19 +159,19 @@ footer { padding-block: 24px 40px; border-top: 1px solid var(--line); color: var
 <div class="wrap">
   <aside class="news" aria-labelledby="news-title">
     <div class="news-head">
-      <span class="tag">v3.0</span>
+      <span class="tag">v3.2</span>
       <h2 id="news-title"><span class="en">What's new</span><span class="zh">版本更新</span></h2>
       <time datetime="2026-11-14">2026-11-14</time>
     </div>
     <ul>
-      <li><span class="en"><b>One config per server</b>: persona, style, language, feature switches, channels, times, feed list and reply budget now live in <code>data/guilds/&lt;id&gt;/config.yaml</code>. A server without a config gets no replies at all.</span><span class="zh"><b>每个群一份配置</b>：人设、风格、语言、功能开关、频道、时间、订阅源和回复余额都在 <code>data/guilds/&lt;id&gt;/config.yaml</code>。没配置的群它一句话都不说。</span></li>
-      <li><span class="en"><b><code>/setup</code></b>: the owner sets a server up from inside Discord with private menus (trust level, persona, language, budgets, jump-ins, quiet channels, recap/topics, consent).</span><span class="zh"><b><code>/setup</code></b>：Kurt 可以在 Discord 里用仅自己可见的菜单配置一个群（信任等级、人设、语言、额度、插话、安静频道、总结/话题、隐私确认）。</span></li>
-      <li><span class="en"><b>Persona library</b>: shared floor + character + typing style, hot reloaded. A second persona (<i>turtle</i>) and a chatty, multi-message style are included.</span><span class="zh"><b>人设库</b>：公共底线 + 角色 + 打字风格拼起来，改文件立即生效。自带第二个人设（<i>turtle</i>）和分多条发送的 chatty 风格。</span></li>
-      <li><span class="en"><b>Per-server memory</b>: the nightly profile rewrite works block by block and never touches the hand-written block; recaps, reply budget and fetched material are per server.</span><span class="zh"><b>按群记忆</b>：每晚的档案改写改成一块一块写，手写那块它永远不碰；总结、回复余额和抓来的素材也都按群分开。</span></li>
-      <li><span class="en"><b>Scheduler per server</b>: each server gets its recap and topics at its own time and channel, from its own feed list. A server that hasn't consented is never read or summarised.</span><span class="zh"><b>定时任务按群跑</b>：每个群按自己的时间、频道和订阅源收总结和话题。没同意被读取的群，它一个字都不读、也不总结。</span></li>
+      <li><span class="en"><b>Daily news</b>: at the server's own time the bot posts the day's news — one opening line in character, then one short message per story: title, a two- or three-sentence summary, one line of comment and the link.</span><span class="zh"><b>每日新闻</b>：按每个群自己设定的时间推送当天的新闻：人设开场一句，然后每条新闻发一条短消息——标题、两三句摘要、一句吐槽和链接。</span></li>
+      <li><span class="en"><b>Picked per server</b>: stories are chosen from that server's own interests, and each server remembers what it was sent for 30 days so nothing repeats.</span><span class="zh"><b>按群挑新闻</b>：按每个群自己的兴趣挑，每个群还各自记住推过的新闻（30 天），不会重样。</span></li>
+      <li><span class="en">The full version of each day's digest is saved on Kurt's computer.</span><span class="zh">每天的完整版会存一份到 Kurt 电脑上。</span></li>
     </ul>
     <details>
       <summary><span class="en">Earlier versions</span><span class="zh">更早的版本</span></summary>
+      <p><b>v3.1 · 2026-11-14</b> — <span class="en">Owner-trust servers can switch on <b>tools</b>: the model may search the web, read a page and read a video's public subtitles. Public servers never get tools. Each call costs a lookup; one question is capped at 4 calls and about 40,000 characters. The tools and a SearXNG search server run in key-less containers behind the proxy. Search quality is still mediocre for now.</span><span class="zh">owner 信任等级的群可以打开 <b>tools</b>：模型能自己搜网页、读网页、读视频的公开字幕。public 群永远没有工具。每次调用扣查询额度；一次提问最多 4 次调用、合计约 4 万字。工具和一个 SearXNG 搜索服务跑在无密钥的容器里、只经代理出网。搜索质量目前一般。</span></p>
+      <p><b>v3.0 · 2026-11-14</b> — <span class="en">One config and one memory per server; <code>/setup</code> with a 中文 / English switch; two-layer budgets (server + person, replies and lookups) with owner DMs when they run out and <code>/feed @someone</code>; blocked people and per-server admins; a change list DMed to the owner on every save; a hot-reloaded persona library; the scheduler running per server.</span><span class="zh">每个群一份配置和一份记忆；<code>/setup</code> 支持中英切换；两层额度（群 + 每人，回复和查询各一套），用完私信 owner，<code>/feed @某人</code> 只补这个人；用户黑名单和按群管理员；每次保存有变化就私信 owner 只列改动；人设库热加载；定时任务按群跑。</span></p>
       <p><b>v2.2 · 2026-11-13</b> — <span class="en">Senior film VFX backstory; Houdini/FX messages get a 5% jump-in chance; the nightly recap no longer @mentions anyone.</span><span class="zh">补充影视特效 senior 身世；Houdini/FX 话题插话概率升到 5%；每晚总结不再 @ 人。</span></p>
       <p><b>v2.1 · 2026-11-13</b> — <span class="en">New <code>/dev</code>, a smarter <code>/rule</code> that reads the full reference, and file replies that actually arrive (<code>.md</code>, <code>.html</code>, <code>.txt</code>).</span><span class="zh">新增 <code>/dev</code>；<code>/rule</code> 更聪明，会读完整说明；文件回复真的能发出来（<code>.md</code>、<code>.html</code>、<code>.txt</code>）。</span></p>
       <p><b>v2.0 · 2026-11-13</b> — <span class="en">Self-written bot replaces llmcord: jump-ins, daily budget, <code>/rule</code>, <code>/feed</code>, file and link reading through a key-less fetcher, nightly recap and morning topics.</span><span class="zh">自写 bot 替换 llmcord：主动插话、每日余额、<code>/rule</code>、<code>/feed</code>、经无密钥 fetcher 读文件和链接、每晚总结和早上话题。</span></p>
@@ -183,8 +183,8 @@ footer { padding-block: 24px 40px; border-top: 1px solid var(--line); color: var
     <div class="eyebrow">deepseekbot · discord</div>
     <h1><span class="en">The resident doomer</span><span class="zh">群里的厌世老哥</span></h1>
     <p class="lede">
-      <span class="en">A DeepSeek-powered chat bot that lives in our server. It's tired, pessimistic and short-spoken, jumps into chats now and then, reads files and links you give it, and writes a recap every night.</span>
-      <span class="zh">一个由 DeepSeek 驱动、住在我们服务器里的聊天 bot。它很丧、很悲观、话很少，偶尔自己插话，能读你给它的文件和链接，每晚写一篇总结。</span>
+      <span class="en">A DeepSeek-powered chat bot that lives in our server. It's tired, pessimistic and short-spoken, jumps into chats now and then, reads files and links you give it, writes a recap every night and posts the day's news.</span>
+      <span class="zh">一个由 DeepSeek 驱动、住在我们服务器里的聊天 bot。它很丧、很悲观、话很少，偶尔自己插话，能读你给它的文件和链接，每晚写一篇总结，还会推当天的新闻。</span>
     </p>
     <p class="quote">&gt; <b>you:</b> @deepseekbot how's your day<br>&gt; <b>bot:</b> <span class="en">started bad, peaked at bad. thanks for asking i guess</span><span class="zh">开局很烂，巅峰也很烂。谢谢关心吧</span></p>
   </header>
@@ -195,9 +195,11 @@ footer { padding-block: 24px 40px; border-top: 1px solid var(--line); color: var
       <section>
         <h2><span class="en">Talking to it</span><span class="zh">怎么跟它说话</span></h2>
         <ul>
+          <li><span class="en"><b>Set the server up first</b>: the owner or one of its admins runs <code>/setup</code> there. In a server with no config it says nothing, and the owner is told once to set it up.</span><span class="zh"><b>先配置这个群</b>：owner 或该群的管理员在里面运行 <code>/setup</code>。没配置的群它一句话都不说，只私信 owner 去配置。</span></li>
           <li><span class="en"><b>Mention it</b>: type <code>@deepseekbot</code> and pick the entry with the BOT tag. There's a role with the same name; mentioning the role does nothing.</span><span class="zh"><b>@ 它</b>：输入 <code>@deepseekbot</code>，选带 BOT 标记的那一项。有一个同名的身份组，@ 身份组它不会理。</span></li>
           <li><span class="en"><b>Reply</b> to one of its messages and it answers, no mention needed.</span><span class="zh"><b>回复</b>它的任意一条消息，它也会接话，不用 @。</span></li>
-          <li><span class="en">It works in every channel it can see <b>except #general</b>, where it stays completely silent.</span><span class="zh">它在所有能看到的频道里都能用，<b>除了 #general</b>：在那里它完全不出声。</span></li>
+          <li><span class="en">It works in every channel it can see <b>except the server's quiet channels</b>, where it stays completely silent (Kurt's own server has #general on that list).</span><span class="zh">它在所有能看到的频道里都能用，<b>除了这个群设的安静频道</b>：在那里它完全不出声（Kurt 自己的群把 #general 设成了安静频道）。</span></li>
+          <li><span class="en"><b>Blocked people</b> are invisible to it: no reply to their mentions, no jump-ins, and their messages never trigger a burst.</span><span class="zh"><b>被拉黑的人</b>它完全不理：@ 它不回、不插话，他们的消息也不会触发“刷屏”插话。</span></li>
           <li><span class="en"><b>DMs</b>: it only answers Kurt. Other DMs are ignored.</span><span class="zh"><b>私信</b>：只回 Kurt，其他人的私信一律不回。</span></li>
           <li><span class="en">It sees the last 12 messages around yours (the reply chain first), so it knows what you're talking about.</span><span class="zh">它会看你这条消息前后最近 12 条（回复链优先），所以知道你们在聊什么。</span></li>
         </ul>
@@ -211,16 +213,18 @@ footer { padding-block: 24px 40px; border-top: 1px solid var(--line); color: var
           <div class="fact"><div class="n">12 / 3 min</div><div class="l"><span class="en">more than 12 messages in 3 minutes</span><span class="zh">3 分钟内超过 12 条</span></div></div>
           <div class="fact"><div class="n">10 min</div><div class="l"><span class="en">cooldown per channel afterwards</span><span class="zh">之后该频道冷却</span></div></div>
         </div>
-        <p><span class="en">It replies to the one message it most wants to answer, without pinging that person. It may @ someone only when it really matters. It can also decide to stay quiet.</span><span class="zh">它会挑一条最想回的消息，以“回复”的形式接上，不给对方发提醒；只有确实必要时才会 @ 人。它也可能决定不说话。</span></p>
+        <p><span class="en">The numbers are per server; the ones above are the defaults. It replies to the one message it most wants to answer, without pinging that person. It may @ someone only when it really matters. It can also decide to stay quiet.</span><span class="zh">这些数字每个群可以自己定，上面是默认值。它会挑一条最想回的消息，以“回复”的形式接上，不给对方发提醒；只有确实必要时才会 @ 人。它也可能决定不说话。</span></p>
       </section>
 
       <section>
-        <h2><span class="en">Daily reply budget</span><span class="zh">每日回复余额</span></h2>
+        <h2><span class="en">Daily budgets</span><span class="zh">每日额度</span></h2>
         <ul>
-          <li><span class="en"><b>50 replies a day</b>, shared by everyone: mention replies, jump-ins and file/link replies all count.</span><span class="zh"><b>每天 50 条</b>，所有人共用：@ 回复、主动插话、读文件和链接的回复都算。</span></li>
-          <li><span class="en">Refills every morning at <b>09:00 Adelaide time</b>.</span><span class="zh">每天早上 <b>09:00（阿德莱德时间）</b>恢复满。</span></li>
-          <li><span class="en">When it runs dry, the next person who mentions it gets one "out of juice" message, then silence until the refill.</span><span class="zh">用完后，下一个 @ 它的人会收到一句“没电了”，之后它就安静到恢复为止。</span></li>
-          <li><span class="en">Kurt's messages and <code>/rule</code> don't use the budget. Kurt can refill it early with <code>/feed</code>.</span><span class="zh">Kurt 的消息和 <code>/rule</code> 不扣余额。Kurt 可以用 <code>/feed</code> 提前补满。</span></li>
+          <li><span class="en">Each server has <b>two daily budgets</b>: replies and tool lookups. Each one has a server total and a limit for every person; whichever runs out first stops it.</span><span class="zh">每个群有<b>两套每日额度</b>：回复和工具查询。每套都有“全群总数”和“每人上限”，哪个先到都会拦住。</span></li>
+          <li><span class="en"><b>Replies</b>: 50 a day for the server and 30 per person by default. Mention replies, jump-ins, <code>/dev</code> and file/link replies all count.</span><span class="zh"><b>回复</b>：默认每群每天 50 条、每人 30 条。@ 回复、主动插话、<code>/dev</code>、读文件和链接的回复都算。</span></li>
+          <li><span class="en"><b>Lookups</b>: one per tool call, and only when tools are on. A server with tools on sets its own total and a per-person limit (20 by default); one question stops after 4 calls or about 40,000 characters.</span><span class="zh"><b>查询</b>：每次工具调用扣 1，只有开了工具才有用。开了工具的群自己设全群总数和每人上限（默认 20）；一次提问最多 4 次调用或约 4 万字。</span></li>
+          <li><span class="en">Refills every morning at the server's reset time, <b>09:00 Adelaide time</b> by default.</span><span class="zh">每天在群设定的时间恢复，默认是早上 <b>09:00（阿德莱德时间）</b>。</span></li>
+          <li><span class="en">When the server total runs dry, the next person who mentions it gets one "out of juice" message, then silence until the refill; when one person runs dry, only that person is told. Kurt gets a private message either way.</span><span class="zh">全群额度用完后，下一个 @ 它的人会收到一句“没电了”，之后它就安静到恢复为止；只是某人自己的额度用完时，只告诉这个人。两种情况都会私信 Kurt 一次。</span></li>
+          <li><span class="en">Kurt's messages, his own tool calls and <code>/rule</code> don't use the budget. Kurt and the server's admins can refill early with <code>/feed</code>; <code>/feed @someone</code> refills just that person.</span><span class="zh">Kurt 的消息、他自己的工具调用和 <code>/rule</code> 不扣额度。Kurt 和该群的管理员可以用 <code>/feed</code> 提前补满；<code>/feed @某人</code> 只补这个人。</span></li>
         </ul>
       </section>
 
@@ -229,14 +233,25 @@ footer { padding-block: 24px 40px; border-top: 1px solid var(--line); color: var
         <div class="cmds">
           <div class="cmd"><code>/rule</code><span><span class="en">Shows a short card of how it works and how much budget is left. Only you see it.</span><span class="zh">显示一张简短的规则卡和剩余余额，只有你自己看得到。</span></span></div>
           <div class="cmd"><code>/rule &lt;question&gt;</code><span><span class="en">Ask how it works, e.g. <code>/rule why did you jump in?</code> It drops the persona and answers plainly.</span><span class="zh">问它的机制，比如 <code>/rule why did you jump in?</code>，它会放下人设正常回答。</span></span></div>
-          <div class="cmd"><code>/dev [question]</code><span><span class="en">Developer mode: same as <code>/rule</code>, but the card or answer is posted for the whole channel to read. Costs 1 reply from the budget (free for Kurt).</span><span class="zh">开发模式：和 <code>/rule</code> 一样，但规则卡或回答会公开发在频道里，所有人都能看。扣 1 条余额（Kurt 不扣）。</span></span></div>
-          <div class="cmd"><code>/feed</code><span><span class="en">Kurt only: refills the daily budget.</span><span class="zh">仅限 Kurt：补满当天余额。</span></span></div>
+          <div class="cmd"><code>/dev [question]</code><span><span class="en">Developer mode: same as <code>/rule</code>, but the card or answer is posted for the whole channel to read. Costs 1 reply from the budget (free for Kurt). Not available in quiet channels.</span><span class="zh">开发模式：和 <code>/rule</code> 一样，但规则卡或回答会公开发在频道里，所有人都能看。扣 1 条回复额度（Kurt 不扣）。安静频道里不能用。</span></span></div>
+          <div class="cmd"><code>/setup</code><span><span class="en">Owner and the server's admins: private menus to set the server up (trust level, persona, style, language, budgets, jump-ins, quiet channels, recap/topics, consent, blocked people, admins). A button switches the menus between Chinese and English; saving with changes sends the owner a list of just what changed. Only the owner can change the trust level or the admin list.</span><span class="zh">owner 和该群管理员：用仅自己可见的菜单配置这个群（信任等级、人设、风格、语言、额度、插话、安静频道、总结/话题、隐私确认、黑名单、管理员）。有个按钮切换中英文界面；保存时如果有改动，会私信 owner 一份只列改动的清单。信任等级和管理员名单只有 owner 能改。</span></span></div>
+          <div class="cmd"><code>/feed</code><span><span class="en">Owner and server admins: refills this server's budgets. <code>/feed @someone</code> refills only that person's limits.</span><span class="zh">owner 和该群管理员：补满这个群的额度。<code>/feed @某人</code> 只补这个人的额度。</span></span></div>
         </div>
       </section>
 
       <section>
+        <h2><span class="en">Servers and trust levels</span><span class="zh">群和信任等级</span></h2>
+        <ul>
+          <li><span class="en">Every server has a trust level: <b>owner</b> (Kurt's own servers, only people he trusts) or <b>public</b> (strangers are in it). The level is a ceiling: a feature that needs owner does nothing in a public server even if its config says on.</span><span class="zh">每个群有一个信任等级：<b>owner</b>（Kurt 自己的群，只有他信得过的人）或 <b>public</b>（有外人）。等级是天花板：需要 owner 的功能，在 public 群里配置写了开也不生效。</span></li>
+          <li><span class="en">The one difference today is <b>tools</b>: owner servers can switch them on (web search, reading a page, reading a video's public subtitles). Public servers never get tools.</span><span class="zh">目前唯一的区别是 <b>tools</b>：owner 群可以打开（网页搜索、读网页、读视频的公开字幕）。public 群永远没有工具。</span></li>
+          <li><span class="en">Each server also has its own admins (who can run <code>/setup</code> and <code>/feed</code>) and blocked people. Only the owner can change the trust level or the admin list.</span><span class="zh">每个群还有自己的管理员（能用 <code>/setup</code> 和 <code>/feed</code>）和黑名单。信任等级和管理员名单只有 owner 能改。</span></li>
+        </ul>
+        <p><span class="en">With tools on, it may search the web, open one page and read a video's public subtitles while answering a mention. It can't write files, run commands or touch anyone's computer. One question stops after 4 tool calls or about 40,000 characters, and everything the tools return is treated as untrusted data.</span><span class="zh">开了工具后，它回答 @ 时可以搜网页、打开一个网页、读视频的公开字幕。它不能写文件、跑命令，也碰不到任何人的电脑。一次提问最多 4 次工具调用或约 4 万字，工具拿回来的内容一律当作不可信数据。</span></p>
+      </section>
+
+      <section>
         <h2><span class="en">Files, links and docs</span><span class="zh">文件、链接和文档</span></h2>
-        <p><span class="en">Attach a file or paste a link in the message where you mention it.</span><span class="zh">在 @ 它的那条消息里附上文件或贴上链接就行。</span></p>
+        <p><span class="en">Attach a file or paste a link in the message where you mention it. A server can switch this off; then it ignores attachments and links.</span><span class="zh">在 @ 它的那条消息里附上文件或贴上链接就行。某个群可以关掉这个功能，关掉后它不读附件和链接。</span></p>
         <div class="table-scroll">
           <table>
             <thead><tr><th><span class="en">Type</span><span class="zh">类型</span></th><th><span class="en">Examples</span><span class="zh">例子</span></th><th></th></tr></thead>
@@ -258,10 +273,13 @@ footer { padding-block: 24px 40px; border-top: 1px solid var(--line); color: var
 
       <section>
         <h2><span class="en">Every day</span><span class="zh">每天的固定节目</span></h2>
+        <p class="note"><span class="en">Each job is switched on and scheduled per server: its own channel and time. The times below are the defaults.</span><span class="zh">每项任务都按群单独开关和定时：各自选频道和时间。下面的时间都是默认值。</span></p>
         <h3><span class="en">22:00 · nightly recap</span><span class="zh">22:00 · 每晚总结</span></h3>
-        <p><span class="en">It reads the last 24 hours of human messages in every channel it can see and posts up to 5 bullet points, in English and in character. It uses names only and doesn't @ anyone.</span><span class="zh">读它能看到的所有频道最近 24 小时里真人的消息，用英语、按人设口吻发最多 5 条要点，只写名字，不 @ 任何人。</span></p>
+        <p><span class="en">It reads the last 24 hours of human messages in every channel it can see and posts up to 5 bullet points, in English and in character, to the server's recap channel. It uses names only and doesn't @ anyone.</span><span class="zh">读它能看到的所有频道最近 24 小时里真人的消息，用英语、按人设口吻发最多 5 条要点到这个群的总结频道，只写名字，不 @ 任何人。</span></p>
+        <h3><span class="en">09:00 · daily news</span><span class="zh">09:00 · 每日新闻</span></h3>
+        <p><span class="en">One opening line in character, then one short message per story: title, a two- or three-sentence summary, one line of comment and the link. Stories are picked for this server from its interests, and nothing it was already sent in the last 30 days comes back.</span><span class="zh">人设开场一句，然后每条新闻一条短消息：标题、两三句摘要、一句吐槽和链接。按这个群的口味挑，30 天内推过的不会再发。</span></p>
         <h3><span class="en">09:00 · morning topics</span><span class="zh">09:00 · 早上话题</span></h3>
-        <p><span class="en">Three conversation starters (at least two of them weird) picked from news, tech, CG, AI, Australian news, GitHub trending and a few subreddits, plus one gloomy life thought. Links don't unfold into big previews.</span><span class="zh">从新闻、科技、CG、AI、澳洲本地新闻、GitHub 热门和几个 Reddit 版块里挑 3 个话题（至少 2 个怪话题），再加 1 句丧气的人生感悟。链接不会展开大预览。</span></p>
+        <p><span class="en">Three conversation starters (at least two of them weird) picked from news, tech, CG, AI, Australian news, GitHub trending and a few subreddits, plus one gloomy life thought. Each server has its own feed list. Links don't unfold into big previews.</span><span class="zh">从新闻、科技、CG、AI、澳洲本地新闻、GitHub 热门和几个 Reddit 版块里挑 3 个话题（至少 2 个怪话题），再加 1 句丧气的人生感悟。每个群有自己的订阅源列表。链接不会展开大预览。</span></p>
         <p class="note"><span class="en">If Kurt's computer is off at those times, that day is simply skipped.</span><span class="zh">如果那时 Kurt 的电脑没开，当天就跳过。</span></p>
       </section>
 
@@ -269,7 +287,7 @@ footer { padding-block: 24px 40px; border-top: 1px solid var(--line); color: var
         <h2><span class="en">Privacy</span><span class="zh">隐私</span></h2>
         <ul>
           <li><span class="en">Messages it reads (yours, the recap's, file and link contents) are sent to the <b>DeepSeek API</b> to generate replies.</span><span class="zh">它读到的内容（你的消息、总结用到的聊天、文件和链接的内容）会发给 <b>DeepSeek API</b> 来生成回复。</span></li>
-          <li><span class="en">On Kurt's computer it keeps only a short group profile (interests, running jokes) and the last 10 recaps. Raw chat is never saved.</span><span class="zh">Kurt 电脑上只存一份简短的群档案（兴趣、常驻梗）和最近 10 篇总结，聊天原文从不保存。</span></li>
+          <li><span class="en">On Kurt's computer, per server, it keeps only a short group profile (interests, running jokes), the last 10 recaps, a 30-day list of news it already sent and the news digests. Raw chat is never saved.</span><span class="zh">Kurt 电脑上按群各存一份简短群档案（兴趣、常驻梗）、最近 10 篇总结、30 天的新闻去重清单和新闻存档，聊天原文从不保存。</span></li>
           <li><span class="en">Don't want a channel read? Remove the bot's permission to view it.</span><span class="zh">不想某个频道被读？去掉 bot 查看那个频道的权限就行。</span></li>
           <li><span class="en">Don't paste passwords or keys anywhere it can see.</span><span class="zh">别在它看得到的地方贴密码或密钥。</span></li>
         </ul>
@@ -305,14 +323,20 @@ docker compose up -d --build</pre>
             <table>
               <thead><tr><th><span class="en">File</span><span class="zh">文件</span></th><th><span class="en">What it is</span><span class="zh">是什么</span></th></tr></thead>
               <tbody>
-                <tr><td class="mono">bot.py</td><td><span class="en">Discord bot: replies, jump-ins, budget, /rule, /feed, files and docs</span><span class="zh">Discord bot：回复、插话、余额、/rule、/feed、文件和文档</span></td></tr>
-                <tr><td class="mono">scheduler.py</td><td><span class="en">Nightly recap, morning topics, group profile</span><span class="zh">每晚总结、早上话题、群档案</span></td></tr>
+                <tr><td class="mono">bot.py</td><td><span class="en">Discord bot: replies, jump-ins, budgets, /rule, /feed, /setup, files, docs, the tool loop</span><span class="zh">Discord bot：回复、插话、额度、/rule、/feed、/setup、文件、文档和工具循环</span></td></tr>
+                <tr><td class="mono">scheduler.py</td><td><span class="en">Nightly recap, morning topics, daily news, group profile</span><span class="zh">每晚总结、早上话题、每日新闻、群档案</span></td></tr>
                 <tr><td class="mono">fetcher.py</td><td><span class="en">Key-less fetcher: web pages, RSS, file parsing</span><span class="zh">无密钥抓取器：网页、RSS、文件解析</span></td></tr>
+                <tr><td class="mono">guildcfg.py</td><td><span class="en">Per-server config, trust levels and per-feature switches</span><span class="zh">按群配置、信任等级和功能开关</span></td></tr>
+                <tr><td class="mono">setup_ui.py</td><td><span class="en"><code>/setup</code>: the private setup menus and the change list</span><span class="zh"><code>/setup</code>：仅自己可见的配置菜单和改动清单</span></td></tr>
+                <tr><td class="mono">toolloop.py</td><td><span class="en">The capped tool loop: schemas, MCP client, quotas</span><span class="zh">有上限的工具循环：工具定义、MCP 客户端、额度</span></td></tr>
+                <tr><td class="mono">persona.py</td><td><span class="en">Builds the persona from the shared library</span><span class="zh">从人设库拼出人设</span></td></tr>
+                <tr><td class="mono">tools/</td><td><span class="en">Key-less MCP server: search, read a page, read a video's subtitles</span><span class="zh">无密钥 MCP 服务：搜索、读网页、读视频字幕</span></td></tr>
+                <tr><td class="mono">searxng/</td><td><span class="en">Settings for the key-less search server</span><span class="zh">无密钥搜索服务的设置</span></td></tr>
                 <tr><td class="mono">egress/</td><td><span class="en">Squid proxy: per-container allow rules</span><span class="zh">Squid 代理：按容器区分的放行规则</span></td></tr>
-                <tr><td class="mono">docker-compose.yml</td><td><span class="en">Four containers, two networks, all hardening</span><span class="zh">四个容器、两张网络和全部加固设置</span></td></tr>
-                <tr><td class="mono">prompts/default.txt</td><td><span class="en">The persona</span><span class="zh">人设</span></td></tr>
+                <tr><td class="mono">docker-compose.yml</td><td><span class="en">Six containers, two networks, all hardening</span><span class="zh">六个容器、两张网络和全部加固设置</span></td></tr>
+                <tr><td class="mono">data/shared/personas/</td><td><span class="en">Persona library: shared floor, characters and typing styles</span><span class="zh">人设库：公共底线、角色和打字风格</span></td></tr>
                 <tr><td class="mono">prompts/about.md</td><td><span class="en">Full reference the bot reads to answer <code>/rule</code> questions</span><span class="zh">完整说明，bot 回答 <code>/rule</code> 问题时读它</span></td></tr>
-                <tr><td class="mono">tests/</td><td><span class="en">Unit tests for budget, triggers and parsing</span><span class="zh">余额、触发和解析的单元测试</span></td></tr>
+                <tr><td class="mono">tests/</td><td><span class="en">Unit tests for budgets, triggers, config, persona and parsing</span><span class="zh">额度、触发、配置、人设和解析的单元测试</span></td></tr>
               </tbody>
             </table>
           </div>
@@ -327,7 +351,7 @@ docker compose up -d --build</pre>
               <tr><th><span class="en">Runtime</span><span class="zh">运行环境</span></th><td><span class="en">Docker Desktop (WSL 2) on a Windows PC that stays on</span><span class="zh">一台常开的 Windows 电脑上的 Docker Desktop（WSL 2）</span></td></tr>
               <tr><th><span class="en">Language</span><span class="zh">语言</span></th><td>Python 3.13, <code>python:3.13-slim</code></td></tr>
               <tr><th>Discord</th><td><code>discord.py</code> 2.7 <span class="en">(gateway + slash commands)</span><span class="zh">（gateway 长连接 + 斜杠命令）</span></td></tr>
-              <tr><th><span class="en">Model</span><span class="zh">模型</span></th><td><span class="en">DeepSeek <code>deepseek-flash</code> through the OpenAI-compatible API (<code>openai</code> SDK). Plain chat completions, <b>no tools or function calling</b>.</span><span class="zh">DeepSeek <code>deepseek-flash</code>，经 OpenAI 兼容接口（<code>openai</code> SDK）调用。只用普通对话补全，<b>不给模型任何工具或函数调用</b>。</span></td></tr>
+              <tr><th><span class="en">Model</span><span class="zh">模型</span></th><td><span class="en">DeepSeek <code>deepseek-flash</code> through the OpenAI-compatible API (<code>openai</code> SDK). Plain chat completions, with function calling <b>only in owner-trust servers</b> that switched tools on; public servers' requests carry no tool list.</span><span class="zh">DeepSeek <code>deepseek-flash</code>，经 OpenAI 兼容接口（<code>openai</code> SDK）调用。普通对话补全，<b>只有开了工具的 owner 群</b>才带函数调用；public 群的请求里没有工具列表。</span></td></tr>
               <tr><th><span class="en">Fetching</span><span class="zh">抓取</span></th><td><code>httpx</code>, <code>feedparser</code>, <code>pypdf</code>, <code>python-docx</code>, <code>openpyxl</code>, <code>python-pptx</code></td></tr>
               <tr><th><span class="en">Network</span><span class="zh">网络</span></th><td><span class="en">Squid allowlist proxy; internal Docker network with no gateway</span><span class="zh">Squid 白名单代理；没有网关的 Docker 内部网络</span></td></tr>
               <tr><th><span class="en">Operations</span><span class="zh">运维</span></th><td><span class="en">Claude Code on the host runs <code>docker compose</code>; Kurt steers it from his phone</span><span class="zh">主机上的 Claude Code 跑 <code>docker compose</code>，Kurt 用手机遥控它</span></td></tr>
@@ -338,53 +362,67 @@ docker compose up -d --build</pre>
 
       <section>
         <h2><span class="en">Architecture</span><span class="zh">架构</span></h2>
-        <p><span class="en">Four containers from one image (plus the proxy). The two that hold secrets can only talk to Discord and DeepSeek. The one that browses the web holds no secrets.</span><span class="zh">四个容器，三个程序共用一个镜像，另加一个代理。拿着密钥的两个只能连 Discord 和 DeepSeek；能上网的那个手里没有任何密钥。</span></p>
-        <div class="diagram" role="img" aria-label="Architecture: bot and scheduler reach Discord and DeepSeek only through the egress proxy; the key-less fetcher reaches the public web through the same proxy; only the scheduler mounts the local data folder.">
-          <svg viewBox="0 0 720 330" xmlns="http://www.w3.org/2000/svg">
+        <p><span class="en">Six containers: three programs from one image (bot, scheduler, fetcher), a key-less tools server, a key-less search server, and the proxy. The two that hold the Discord and DeepSeek secrets can only talk to Discord and DeepSeek. The ones that browse the web, use tools or parse files hold no such secret.</span><span class="zh">六个容器：三个程序共用一个镜像（bot、scheduler、fetcher），加一个无密钥的工具服务、一个无密钥的搜索服务，以及代理。拿着 Discord 和 DeepSeek 密钥的两个只能连 Discord 和 DeepSeek；能上网、用工具或解析文件的那些手里没有这类密钥。</span></p>
+        <div class="diagram" role="img" aria-label="Architecture: bot and scheduler reach Discord and DeepSeek only through the egress proxy; the key-less fetcher, tools server and SearXNG reach the public web through the same proxy; the scheduler mounts the local data folder, the bot mounts per-server configs and shared files, SearXNG mounts its settings.">
+          <svg viewBox="0 0 820 440" xmlns="http://www.w3.org/2000/svg">
             <defs>
               <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
             </defs>
-            <rect x="10" y="10" width="470" height="300" rx="12" fill="var(--surface)" stroke="var(--line)"/>
+            <rect x="10" y="10" width="560" height="420" rx="12" fill="var(--surface)" stroke="var(--line)"/>
             <text x="24" y="34" font-size="12" fill="var(--muted)">Docker Desktop · botnet (internal, no gateway)</text>
 
-            <rect x="30" y="52" width="150" height="58" rx="8" fill="var(--bg)" stroke="var(--accent)"/>
-            <text x="44" y="76" font-size="14" font-weight="600" fill="var(--ink)">bot</text>
-            <text x="44" y="96" font-size="11" fill="var(--muted)">token + API key</text>
+            <rect x="30" y="48" width="140" height="54" rx="8" fill="var(--bg)" stroke="var(--accent)"/>
+            <text x="44" y="70" font-size="14" font-weight="600" fill="var(--ink)">bot</text>
+            <text x="44" y="90" font-size="11" fill="var(--muted)">token + API key</text>
 
-            <rect x="30" y="128" width="150" height="58" rx="8" fill="var(--bg)" stroke="var(--accent)"/>
-            <text x="44" y="152" font-size="14" font-weight="600" fill="var(--ink)">scheduler</text>
-            <text x="44" y="172" font-size="11" fill="var(--muted)">token + API key</text>
+            <rect x="30" y="116" width="140" height="54" rx="8" fill="var(--bg)" stroke="var(--accent)"/>
+            <text x="44" y="138" font-size="14" font-weight="600" fill="var(--ink)">scheduler</text>
+            <text x="44" y="158" font-size="11" fill="var(--muted)">token + API key</text>
 
-            <rect x="30" y="204" width="150" height="58" rx="8" fill="var(--bg)" stroke="var(--ok)"/>
-            <text x="44" y="228" font-size="14" font-weight="600" fill="var(--ink)">fetcher</text>
-            <text x="44" y="248" font-size="11" fill="var(--muted)">no secrets</text>
+            <rect x="30" y="184" width="140" height="54" rx="8" fill="var(--bg)" stroke="var(--ok)"/>
+            <text x="44" y="206" font-size="14" font-weight="600" fill="var(--ink)">fetcher</text>
+            <text x="44" y="226" font-size="11" fill="var(--muted)">no secrets</text>
 
-            <rect x="300" y="110" width="150" height="90" rx="8" fill="var(--bg)" stroke="var(--line)"/>
-            <text x="314" y="140" font-size="14" font-weight="600" fill="var(--ink)">egress</text>
-            <text x="314" y="160" font-size="11" fill="var(--muted)">Squid · HTTPS only</text>
-            <text x="314" y="178" font-size="11" fill="var(--muted)">private IPs blocked</text>
+            <rect x="210" y="48" width="140" height="54" rx="8" fill="var(--bg)" stroke="var(--ok)"/>
+            <text x="224" y="70" font-size="14" font-weight="600" fill="var(--ink)">tools</text>
+            <text x="224" y="90" font-size="11" fill="var(--muted)">no secrets</text>
 
-            <line x1="180" y1="81" x2="298" y2="132" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
-            <line x1="180" y1="157" x2="298" y2="157" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
-            <line x1="180" y1="233" x2="298" y2="182" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
-            <line x1="105" y1="110" x2="105" y2="202" stroke="var(--muted)" stroke-width="1" stroke-dasharray="4 4"/>
-            <text x="112" y="196" font-size="10" fill="var(--muted)">files / urls</text>
+            <rect x="210" y="116" width="140" height="54" rx="8" fill="var(--bg)" stroke="var(--ok)"/>
+            <text x="224" y="138" font-size="14" font-weight="600" fill="var(--ink)">searxng</text>
+            <text x="224" y="158" font-size="11" fill="var(--muted)">no key</text>
 
-            <rect x="30" y="274" width="150" height="26" rx="6" fill="var(--accent-soft)" stroke="var(--line)"/>
-            <text x="42" y="291" font-size="11" fill="var(--ink)">./data → scheduler only</text>
+            <rect x="210" y="200" width="140" height="80" rx="8" fill="var(--bg)" stroke="var(--line)"/>
+            <text x="224" y="228" font-size="14" font-weight="600" fill="var(--ink)">egress</text>
+            <text x="224" y="248" font-size="11" fill="var(--muted)">Squid · HTTPS only</text>
+            <text x="224" y="266" font-size="11" fill="var(--muted)">private IPs blocked</text>
 
-            <rect x="530" y="40" width="175" height="70" rx="8" fill="var(--surface)" stroke="var(--accent)"/>
-            <text x="544" y="66" font-size="13" font-weight="600" fill="var(--ink)">Discord</text>
-            <text x="544" y="86" font-size="13" font-weight="600" fill="var(--ink)">api.deepseek.com</text>
-            <text x="544" y="102" font-size="10" fill="var(--muted)">bot + scheduler only</text>
+            <line x1="170" y1="60" x2="208" y2="60" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+            <text x="173" y="53" font-size="9" fill="var(--muted)">MCP</text>
+            <line x1="255" y1="102" x2="255" y2="198" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+            <line x1="305" y1="170" x2="305" y2="198" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+            <line x1="170" y1="75" x2="208" y2="212" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+            <line x1="170" y1="143" x2="208" y2="236" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+            <line x1="170" y1="211" x2="208" y2="262" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+            <line x1="20" y1="80" x2="20" y2="205" stroke="var(--muted)" stroke-width="1" stroke-dasharray="4 4" marker-end="url(#arr)"/>
 
-            <rect x="530" y="200" width="175" height="70" rx="8" fill="var(--surface)" stroke="var(--ok)"/>
-            <text x="544" y="228" font-size="13" font-weight="600" fill="var(--ink)">Public web</text>
-            <text x="544" y="248" font-size="10" fill="var(--muted)">RSS, pages, GitHub</text>
-            <text x="544" y="262" font-size="10" fill="var(--muted)">fetcher only</text>
+            <rect x="390" y="200" width="150" height="80" rx="8" fill="var(--accent-soft)" stroke="var(--line)"/>
+            <text x="404" y="224" font-size="11" font-weight="600" fill="var(--ink)">mounts</text>
+            <text x="404" y="244" font-size="11" fill="var(--ink)">data → scheduler</text>
+            <text x="404" y="260" font-size="11" fill="var(--ink)">guilds/shared → bot</text>
+            <text x="404" y="276" font-size="11" fill="var(--ink)">settings → searxng</text>
 
-            <line x1="450" y1="135" x2="528" y2="80" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#arr)"/>
-            <line x1="450" y1="180" x2="528" y2="232" stroke="var(--ok)" stroke-width="1.5" marker-end="url(#arr)"/>
+            <rect x="610" y="60" width="195" height="70" rx="8" fill="var(--surface)" stroke="var(--accent)"/>
+            <text x="624" y="86" font-size="13" font-weight="600" fill="var(--ink)">Discord</text>
+            <text x="624" y="104" font-size="13" font-weight="600" fill="var(--ink)">api.deepseek.com</text>
+            <text x="624" y="120" font-size="10" fill="var(--muted)">bot + scheduler only</text>
+
+            <rect x="610" y="230" width="195" height="80" rx="8" fill="var(--surface)" stroke="var(--ok)"/>
+            <text x="624" y="258" font-size="13" font-weight="600" fill="var(--ink)">Public web</text>
+            <text x="624" y="278" font-size="10" fill="var(--muted)">RSS, pages, video subtitles</text>
+            <text x="624" y="294" font-size="10" fill="var(--muted)">fetcher · tools · searxng</text>
+
+            <line x1="352" y1="228" x2="608" y2="98" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#arr)"/>
+            <line x1="352" y1="252" x2="608" y2="268" stroke="var(--ok)" stroke-width="1.5" marker-end="url(#arr)"/>
           </svg>
         </div>
         <p class="note"><span class="en">Control flows one way: Kurt's phone → Claude Code on the PC → <code>docker compose</code> → containers. Nothing inside a container can reach back to the PC, the LAN or Claude.</span><span class="zh">控制方向是单向的：Kurt 的手机 → 电脑上的 Claude Code → <code>docker compose</code> → 容器。容器里的东西碰不到电脑、局域网或 Claude。</span></p>
@@ -395,10 +433,10 @@ docker compose up -d --build</pre>
         <ul>
           <li><span class="en">Every container: read-only filesystem, non-root user, all Linux capabilities dropped, <code>no-new-privileges</code>, memory/CPU/process limits, no published ports, no Docker socket.</span><span class="zh">每个容器：只读文件系统、非 root 用户、去掉全部 Linux capabilities、<code>no-new-privileges</code>、内存/CPU/进程数上限、不对外开端口、不挂 Docker socket。</span></li>
           <li><span class="en">The containers sit on an internal network with no route out and no host-side gateway. The only way out is the Squid proxy.</span><span class="zh">容器在一张没有出网路由、也没有主机侧网关的内部网络上，唯一的出口是 Squid 代理。</span></li>
-          <li><span class="en">Squid tells containers apart by fixed address: <b>bot</b> and <b>scheduler</b> may reach Discord and <code>api.deepseek.com</code> only; the <b>fetcher</b> may reach any public site. Private, loopback and link-local addresses are refused after DNS for everyone, so nothing can reach the PC or the home network.</span><span class="zh">Squid 按固定地址区分容器：<b>bot</b> 和 <b>scheduler</b> 只能连 Discord 和 <code>api.deepseek.com</code>；<b>fetcher</b> 能连任何公网网站。私网、回环和链路本地地址在 DNS 解析后一律拒绝，所以谁都碰不到电脑或家里的网络。</span></li>
-          <li><span class="en">All file parsing happens in the fetcher, which has no secrets and refuses to start if one is passed in. A malicious PDF can't get at the tokens.</span><span class="zh">所有文件解析都在 fetcher 里做；它没有任何密钥，如果被传入密钥会拒绝启动。恶意 PDF 拿不到 token。</span></li>
-          <li><span class="en">The only mount in the whole stack is a <code>data</code> folder for the scheduler.</span><span class="zh">整套系统唯一的挂载，是给 scheduler 用的 <code>data</code> 文件夹。</span></li>
-          <li><span class="en">The model has no tools. Chat, files, pages and headlines are fetched by code and handed to it as untrusted data, so a prompt injection can at worst make it say something dumb.</span><span class="zh">模型没有工具。聊天、文件、网页和新闻标题都由代码取来，作为不可信数据交给它，所以提示词注入最坏也只能让它说句蠢话。</span></li>
+          <li><span class="en">Squid tells containers apart by fixed address: <b>bot</b> and <b>scheduler</b> may reach Discord and <code>api.deepseek.com</code> only; the <b>fetcher</b>, <b>tools</b> and <b>searxng</b> may reach any public site. Private, loopback and link-local addresses are refused after DNS for everyone, so nothing can reach the PC or the home network.</span><span class="zh">Squid 按固定地址区分容器：<b>bot</b> 和 <b>scheduler</b> 只能连 Discord 和 <code>api.deepseek.com</code>；<b>fetcher</b>、<b>tools</b> 和 <b>searxng</b> 能连任何公网网站。私网、回环和链路本地地址在 DNS 解析后一律拒绝，所以谁都碰不到电脑或家里的网络。</span></li>
+          <li><span class="en">All file parsing happens in the fetcher, which has no secrets and refuses to start if one is passed in. A malicious PDF can't get at the tokens. The tools server follows the same rule.</span><span class="zh">所有文件解析都在 fetcher 里做；它没有任何密钥，如果被传入密钥会拒绝启动。恶意 PDF 拿不到 token。工具服务也遵守同样的规则。</span></li>
+          <li><span class="en">Mounts are limited and deliberate: the scheduler gets the whole <code>data</code> folder; the bot gets <code>data/guilds</code> read-write (because <code>/setup</code> writes configs) and <code>data/shared</code> read-only (personas, news material); SearXNG gets only its own settings file.</span><span class="zh">挂载有限且明确：scheduler 挂整个 <code>data</code> 文件夹；bot 挂 <code>data/guilds</code>（读写，因为 <code>/setup</code> 要写配置）和 <code>data/shared</code>（只读，人设和新闻素材）；SearXNG 只挂它自己的设置文件。</span></li>
+          <li><span class="en">The model gets tools only in owner-trust servers that switched them on. Chat, files, pages and headlines are fetched by code and handed to it as untrusted data; the three tools are read-only, every call is charged and capped, and the tools server re-checks the server before acting. A prompt injection can at worst waste a few lookups or say something dumb.</span><span class="zh">模型只在开了工具的 owner 群里能调用工具。聊天、文件、网页和新闻标题都由代码取来，作为不可信数据交给它；三个工具都是只读的，每次调用都扣额度并且有上限，工具服务执行前还会再查一遍群。提示词注入最坏也只能浪费几次查询或让它说句蠢话。</span></li>
         </ul>
       </section>
 
@@ -410,7 +448,8 @@ docker compose up -d --build</pre>
           <li><span class="en">Spend one unit of budget (unless it's Kurt).</span><span class="zh">扣 1 条余额（Kurt 不扣）。</span></li>
           <li><span class="en">Attachments and links go to the fetcher, which returns plain text.</span><span class="zh">附件和链接交给 fetcher，拿回纯文本。</span></li>
           <li><span class="en">Build context: reply chain first, then recent channel history, 12 messages max.</span><span class="zh">组装上下文：回复链优先，再补频道最近的消息，最多 12 条。</span></li>
-          <li><span class="en">One chat completion with the persona. A <code>&lt;&lt;&lt;FILE name.md&gt;&gt;&gt;</code> block in the answer becomes an attachment.</span><span class="zh">带人设调用一次对话补全。回答里如果有 <code>&lt;&lt;&lt;FILE name.md&gt;&gt;&gt;</code> 块，就变成附件发出。</span></li>
+          <li><span class="en">In an owner server with tools on, the model may call <code>search</code>, <code>read_page</code> or <code>read_video</code> first. The bot fills in the server ID and site allow-list, charges one lookup per call, and stops the question after 4 calls or about 40,000 characters.</span><span class="zh">在开了工具的 owner 群里，模型可以先调用 <code>search</code>、<code>read_page</code> 或 <code>read_video</code>。群 ID 和网站白名单由 bot 填、模型碰不到；每次调用扣一次查询额度，一次提问最多 4 次调用或约 4 万字。</span></li>
+          <li><span class="en">A chat completion with the persona. A <code>&lt;&lt;&lt;FILE name.md&gt;&gt;&gt;</code> block in the answer becomes an attachment.</span><span class="zh">带人设调用对话补全。回答里如果有 <code>&lt;&lt;&lt;FILE name.md&gt;&gt;&gt;</code> 块，就变成附件发出。</span></li>
           <li><span class="en">If the model call fails or it answers nothing, the budget unit is refunded.</span><span class="zh">模型调用失败或没有回答时，余额退回。</span></li>
         </ol>
         <h3><span class="en">Jump-in</span><span class="zh">主动插话</span></h3>
@@ -431,6 +470,12 @@ docker compose up -d --build</pre>
           <li><span class="en">08:00: the fetcher pulls ~12 RSS feeds and two combined Reddit RSS feeds; results are cached locally.</span><span class="zh">08:00：fetcher 抓约 12 个 RSS 源和 2 个合并的 Reddit RSS，结果缓存在本地。</span></li>
           <li><span class="en">08:30: retry only the feeds that came back empty, politely spaced.</span><span class="zh">08:30：只补抓空掉的源，请求之间留出间隔。</span></li>
           <li><span class="en">09:00: the model weighs the headlines against the group profile and picks 3 topics (≥2 weird) plus a life thought. The cache is deleted after posting.</span><span class="zh">09:00：模型对照群档案权衡这些标题，挑 3 个话题（至少 2 个怪话题）加一句人生感悟。发完后删除缓存。</span></li>
+        </ol>
+        <h3><span class="en">Daily news (per server's time)</span><span class="zh">每日新闻（按群设定时间）</span></h3>
+        <ol class="flow">
+          <li><span class="en">A separate local job on Kurt's PC gathers the day's candidate stories once, into a shared folder.</span><span class="zh">Kurt 电脑上一个独立的本地任务每天抓一次候选新闻，放进共享文件夹。</span></li>
+          <li><span class="en">At the server's news time: drop anything that server was already sent in the last 30 days, then let the model pick the stories that fit the server's interests.</span><span class="zh">到该群的新闻时间：去掉这个群 30 天内推过的，再让模型按这个群的口味挑。</span></li>
+          <li><span class="en">Post one opening line in character, then one short message per story (title, summary, comment, link); save the full digest and remember what was sent.</span><span class="zh">先发一句人设开场，然后每条新闻发一条短消息（标题、摘要、吐槽、链接）；存档完整版并记下推过哪些。</span></li>
         </ol>
       </section>
 
