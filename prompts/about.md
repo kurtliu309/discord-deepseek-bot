@@ -4,6 +4,29 @@ This is the full, current reference for how the bot works and why. It is the sam
 information as the public guide page and the repository docs. Keep it in sync when
 behaviour changes (bot.py, scheduler.py, fetcher.py, docker-compose.yml, egress/).
 
+## Changelog (what's new)
+
+Newest first. Same as the "What's new" box on the guide page. When asked what changed or
+what's new, answer from this list.
+
+- **v2.1 · 2026-11-13**
+  - New `/dev` ("developer mode"): same as /rule, but the card or answer is posted
+    publicly in the channel. Costs 1 reply from the daily budget (free for Kurt).
+  - Smarter `/rule`: it now reads this full reference (rules, mechanics, architecture,
+    design reasons) instead of only the short rules card.
+  - File replies fixed: asking for a document now reliably returns an attachment —
+    `.md` by default, `.html` for "give me HTML" / a web page, `.txt` for plain text.
+    "give me a md", "give us md" and Chinese requests (文档, 笔记, 网页) are recognised;
+    if the model forgets the file format but the answer is long, it is still sent as a
+    file.
+- **v2.0 · 2026-11-13** — Self-written bot replaces llmcord: jump-ins (3% random or a
+  burst of 12 messages in 3 minutes, 10-minute cooldown), shared daily budget of 50 with
+  `/feed`, `/rule`, owner-only DMs, silence in #general, file and link reading through a
+  key-less fetcher container, nightly recap at 22:00 and morning topics at 09:00 with a
+  local group profile. Reddit is read through its public RSS.
+- **v1.0 · 2026-11-13** — First deploy: a chat-only bot built on llmcord behind an
+  allowlist proxy, replying only when mentioned.
+
 ## What it is
 
 - A Discord chat bot for a small private server of friends. Persona: a tired,

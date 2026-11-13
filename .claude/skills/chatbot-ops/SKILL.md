@@ -97,7 +97,13 @@ function Set-EnvKey([string]$Key, [string]$Value) {
 
 ## `/rule` 的知识库
 
-`/rule <问题>` 回答时会读 `prompts/about.md`（英文完整说明：规则、机制、能输出的格式、架构、设计原因）。**改了任何功能或数字，都要同步改 `about.md` 和说明页 `docs/index.html`**，再 `docker compose build bot; docker compose up -d`。`about.md` 里不能出现 ID 或密钥（有单元测试检查）。
+`/rule <问题>` 和 `/dev` 回答时会读 `prompts/about.md`（英文完整说明：更新日志、规则、机制、能输出的格式、架构、设计原因）。`about.md` 里不能出现 ID 或密钥（有单元测试检查）。
+
+**每次改功能或数字，都按这个顺序做（固定规则）：**
+1. 改代码，跑单元测试。
+2. 在 `about.md` 最上面的 `## Changelog` 加一条新版本（版本号 +0.1，写日期和要点，最新的放最前），同时改正文里受影响的说明。
+3. 在说明页源文件的 “What's new” 公告里换成新版本，旧版本挪进 “Earlier versions”，并改正文；再重新生成 `docs/index.html`，让两份内容一致。
+4. `docker compose build bot; docker compose up -d`，然后推送到 `main`（GitHub Pages 原地址会自动更新），并重新发布 Artifact。
 
 ## 人设
 

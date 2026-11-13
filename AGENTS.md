@@ -15,3 +15,4 @@ Discord 聊天 bot（自写 Python + DeepSeek），在本机 Docker Desktop 里�
 - 不打印、不改 `.env` 里的密钥（`DISCORD_BOT_TOKEN`、`DISCORD_CLIENT_ID`、`DEEPSEEK_API_KEY`），不把 `.env` 提交进 git。
 - 不给模型加 tools / function calling / MCP / 代码执行。所有外部内容（聊天、附件、网页、RSS）都由代码取来、当**数据**传给模型。
 - 改 `egress/allowlist.txt` 里 bot / scheduler 能去的域名、改人设底线、加任何挂载之前，先问 Kurt。
+- 每次改功能：在 `prompts/about.md` 的 `## Changelog` 加新版本，并更新说明页 `docs/index.html` 顶部的 “What's new” 公告（旧版本挪进 Earlier versions）；步骤见 skill `chatbot-ops`。

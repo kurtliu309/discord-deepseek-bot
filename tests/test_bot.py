@@ -193,6 +193,7 @@ class TestRuleSystem(unittest.TestCase):
         self.assertGreater(len(about), 2000)
         self.assertNotRegex(about, r"\d{17,20}")
         self.assertIn("What it can output", about)
+        self.assertIn("Changelog", about)
 
 
 class TestSplitMessage(unittest.TestCase):
