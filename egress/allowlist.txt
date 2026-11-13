@@ -1,0 +1,14 @@
+# Egress allowlist for the bot (Squid dstdomain syntax). One entry per line.
+# A leading dot matches the domain AND all subdomains (".discord.gg" = discord.gg, gateway.discord.gg, gateway-us-east1-b.discord.gg, ...).
+# Only HTTPS CONNECT to port 443 is allowed, and only if the resolved IP is public.
+# After editing: docker compose up -d --build egress
+
+# Discord REST API + interactions (discord.py http.Route.BASE = https://discord.com/api/v10)
+discord.com
+# Discord gateway websocket (wss://gateway.discord.gg and regional resume_gateway_url hosts)
+.discord.gg
+# Discord attachment CDN (llmcord downloads text attachments from message.attachments[].url)
+cdn.discordapp.com
+
+# DeepSeek OpenAI-compatible API
+api.deepseek.com

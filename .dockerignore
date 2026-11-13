@@ -1,0 +1,7 @@
+# Only these are needed to build the bot image (egress/ has its own build context).
+*
+!requirements.txt
+!entrypoint.py
+!config.template.yaml
+!prompts/
+!prompts/**

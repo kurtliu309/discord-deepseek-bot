@@ -1,0 +1,6 @@
+# Runtime deps of llmcord (upstream requirements.txt is unpinned; pinned here for reproducible builds)
+discord.py==2.7.1
+httpx==0.28.1
+openai==3.50.0
+python-dotenv==1.2.4
+PyYAML==6.0.3

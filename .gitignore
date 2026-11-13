@@ -1,0 +1,15 @@
+# secrets / local config
+.env
+.env.*
+!.env.example
+config.yaml
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# misc
+.DS_Store
+*.log

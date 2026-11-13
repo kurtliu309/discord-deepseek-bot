@@ -1,0 +1,100 @@
+# Hardened llmcord (Discord <-> DeepSeek) bot behind an allowlist egress proxy. Stage 1: chat only.
+#
+#   bot  --(botnet, internal: no route out)-->  egress (Squid allowlist)  --(egress_net)-->  internet
+#
+# Isolation rules (do not relax): no ports, no volumes / bind mounts, no docker socket,
+# not privileged, non-root, read-only root fs, all capabilities dropped, and the bot is
+# attached to `botnet` ONLY.
+
+name: discord-deepseek-bot
+
+x-hardening: &hardening
+  restart: unless-stopped
+  init: true
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  privileged: false
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  egress:
+    <<: *hardening
+    build:
+      context: ./egress
+      dockerfile: Dockerfile
+    image: discord-deepseek-bot-egress:local
+    container_name: discord-deepseek-bot-egress
+    user: "13:13"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+      - /var/run/squid:rw,noexec,nosuid,nodev,size=1m,uid=13,gid=13,mode=0700
+      - /var/spool/squid:rw,noexec,nosuid,nodev,size=1m,uid=13,gid=13,mode=0700
+      - /var/log/squid:rw,noexec,nosuid,nodev,size=1m,uid=13,gid=13,mode=0700
+    mem_limit: 128m
+    memswap_limit: 128m
+    cpus: 0.25
+    pids_limit: 50
+    networks:
+      - botnet       # bot -> egress
+      - egress_net   # egress -> internet
+
+  bot:
+    <<: *hardening
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: discord-deepseek-bot:local
+    container_name: discord-deepseek-bot
+    depends_on:
+      - egress
+
+    # Secrets + settings come only from .env (passed as environment variables;
+    # the .env file itself is NOT mounted and is excluded from the image by .dockerignore).
+    env_file:
+      - .env
+    environment:
+      HTTPS_PROXY: http://egress:3128
+      HTTP_PROXY: http://egress:3128
+      https_proxy: http://egress:3128
+      http_proxy: http://egress:3128
+      NO_PROXY: ""
+      no_proxy: ""
+
+    user: "10001:10001"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.5
+    pids_limit: 100
+
+    # Internal network only: the bot has no route to the internet, the host or the LAN;
+    # it can only talk to the egress proxy. No `ports:`.
+    networks:
+      - botnet
+    # Belt and braces: Docker Desktop host names resolve to the container's own loopback.
+    extra_hosts:
+      - "host.docker.internal:127.0.0.1"
+      - "gateway.docker.internal:127.0.0.1"
+      - "kubernetes.docker.internal:127.0.0.1"
+
+networks:
+  botnet:
+    driver: bridge
+    internal: true
+    driver_opts:
+      # Docker Engine >= 28: give the bridge no host-side IP, so the bot cannot reach
+      # services on the host through the network gateway (internal: true alone still allows that).
+      com.docker.network.bridge.gateway_mode_ipv4: isolated
+    enable_ipv6: false
+  egress_net:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "false"
