@@ -16,3 +16,5 @@ venv/
 
 # local bot memory (group profile + recaps): personal data, never commit
 data/
+data-staging/
+data-backup-*/
