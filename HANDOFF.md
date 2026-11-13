@@ -52,6 +52,8 @@ updated: 2026-11-14
 
 ## 待办 / 注意
 
+- **搜索质量差（2026-11-14 Kurt 实测）**：SearXNG 里 brave 一直被限流，bing 抓取结果是垃圾（搜 Houdini 22 返回魔术师维基、服装品牌，甚至 AirPods），模型换 7 次关键词也找不到有效结果。读网页、读视频正常。方案：换正式搜索 API（推荐 Tavily，备选 Brave Search API，额度价格待核实）；Kurt 自己注册拿 key，key 放 tools 容器（要改 AGENTS.md“tools 无密钥”规则，需 Kurt 同意），squid 不用改。Kurt 定了再做。
+
 - **hub 未提交**：`global/agent-ops/skills/delegate-coding/` 三个文件有改动（含 2.2.0“只用 Flash”和别处来的改动），Kurt 说“能提交的时候再提交”——提交前先列出全部改动给 Kurt 确认。
 - `%TEMP%\squidcheck` 里两个临时文件删不掉，无害，Kurt 可手动删。
 - Whisper 转写（读视频没字幕时）留到以后：要在 fetcher/tools 的“禁止本机”规则上开端口口子，需 Kurt 同意。读视频第一版不带 cookies。
