@@ -4,3 +4,5 @@ httpx==0.28.1
 openai==3.50.0
 python-dotenv==1.2.4
 PyYAML==6.0.3
+# scheduler.py: IANA time zones (python:slim has no system tzdata)
+tzdata==2025.2

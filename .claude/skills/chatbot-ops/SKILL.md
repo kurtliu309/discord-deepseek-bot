@@ -10,6 +10,7 @@ description: 运维本机 Docker Desktop 上的 Discord DeepSeek 聊天机器人
 | compose 服务 | 容器名 | 作用 |
 |---|---|---|
 | `bot` | `discord-deepseek-bot` | llmcord 本体。只接在 `botnet`（`internal: true`，没有出网路由） |
+| `scheduler` | `discord-deepseek-bot-scheduler` | 每日任务（`scheduler.py`）：22:00 读全服务器 24h 聊天 + 之前 7 篇总结，发总结；09:00 发话题。和 bot 同镜像、同 hardening，只接 `botnet`。手动跑：`docker compose exec scheduler python /opt/llmcord/scheduler.py --once summary --dry-run` |
 | `egress` | `discord-deepseek-bot-egress` | Squid 白名单代理。接 `botnet` + `egress_net`，只放行 `egress/allowlist.txt` 里的域名、只允许 CONNECT 443、拒绝所有私网 IP |
 
 你（Claude Code）在**容器外面**用 `docker compose` 管理它们；容器里的 bot 碰不到你，也碰不到这台电脑。

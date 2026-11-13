@@ -85,6 +85,40 @@ services:
       - "gateway.docker.internal:127.0.0.1"
       - "kubernetes.docker.internal:127.0.0.1"
 
+  # Daily recap (22:00) + morning topics (09:00). Same image and hardening as the bot,
+  # Discord REST + DeepSeek only, via egress. Stateless: earlier recaps are read back from Discord.
+  scheduler:
+    <<: *hardening
+    image: discord-deepseek-bot:local
+    pull_policy: never
+    container_name: discord-deepseek-bot-scheduler
+    entrypoint: ["python", "/opt/llmcord/scheduler.py"]
+    depends_on:
+      - egress
+      - bot
+    env_file:
+      - .env
+    environment:
+      HTTPS_PROXY: http://egress:3128
+      HTTP_PROXY: http://egress:3128
+      https_proxy: http://egress:3128
+      http_proxy: http://egress:3128
+      NO_PROXY: ""
+      no_proxy: ""
+    user: "10001:10001"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    mem_limit: 128m
+    memswap_limit: 128m
+    cpus: 0.25
+    pids_limit: 50
+    networks:
+      - botnet
+    extra_hosts:
+      - "host.docker.internal:127.0.0.1"
+      - "gateway.docker.internal:127.0.0.1"
+      - "kubernetes.docker.internal:127.0.0.1"
+
 networks:
   botnet:
     driver: bridge

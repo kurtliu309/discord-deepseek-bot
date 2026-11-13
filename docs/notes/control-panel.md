@@ -21,6 +21,11 @@ updated: 2026-11-13
 | 模型 | `.env` 的 `DEEPSEEK_MODEL` | `docker compose up -d` | “换成 deepseek-xxx”（Claude 会先查 ID 存不存在） |
 | 纯文本回复（不用 embed） | `.env` 的 `USE_PLAIN_RESPONSES` | `docker compose up -d` | “改成纯文本回复” |
 | bot 在线状态文字 | `.env` 的 `STATUS_MESSAGE` | `docker compose up -d` | “状态改成……” |
+| 每日总结 / 早上话题的时间 | `.env` 的 `SUMMARY_TIME`（默认 22:00）、`TOPICS_TIME`（默认 09:00）、`SCHED_TZ` | `docker compose up -d` | “总结改到 23:00” |
+| 话题数量、参考几篇旧总结 | `.env` 的 `TOPICS_COUNT`（3）、`HISTORY_RECAPS`（7） | `docker compose up -d` | “早上给 5 个话题” |
+| 总结发到哪个频道 | `.env` 的 `POST_CHANNEL_ID` | `docker compose up -d` | “总结发到这个频道：……” |
+| 总结 / 话题的写法 | `scheduler.py` 里 `summary()` / `topics()` 的提示词 | `docker compose up -d --build` | “总结写短一点” / “话题多点 Houdini” |
+| 马上试跑一次 | — | `--once summary` 或 `--once topics`，加 `--dry-run` 只打印不发 | “现在发一次总结试试” |
 | 启停 | — | `docker compose stop` / `start` | “先停掉 bot” / “开回来” |
 | 看状态、看日志 | — | `docker compose ps` / `logs` | “bot 现在正常吗？” |
 
@@ -44,6 +49,10 @@ updated: 2026-11-13
 ## 锁死、不能动的（隔离要求）
 
 bot 只接 `botnet`；不加 volume、端口、privileged、docker socket；不删只读、非 root、cap_drop、资源上限；第一阶段不给模型加工具或代码执行。完整清单见根目录 `AGENTS.md` 和 skill `chatbot-ops` 的硬规则。
+
+## 每日任务怎么记住“群的方向”
+
+scheduler 容器不存任何东西。每篇总结以固定开头 `[daily recap 日期]` 发到频道，下次运行时从频道里回读最近 `HISTORY_RECAPS` 篇，作为群的方向和长期话题。所以**别删频道里的旧总结**，删了它就“失忆”。总结会读全服务器 bot 能看到的频道，原文会发给 DeepSeek；不想被读的频道，在 Discord 里去掉 bot 的查看权限即可。
 
 ## 坑
 

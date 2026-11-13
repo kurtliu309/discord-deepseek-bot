@@ -2,6 +2,7 @@
 *
 !requirements.txt
 !entrypoint.py
+!scheduler.py
 !config.template.yaml
 !prompts/
 !prompts/**

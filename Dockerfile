@@ -28,7 +28,7 @@ sys.exit('llmcord.py sha256 mismatch: ' + digest) if digest != '${LLMCORD_SHA256
 open('llmcord.py', 'wb').write(data)" \
  && echo "${LLMCORD_COMMIT}" > LLMCORD_COMMIT
 
-COPY entrypoint.py config.template.yaml ./
+COPY entrypoint.py scheduler.py config.template.yaml ./
 COPY prompts/ ./prompts/
 
 # App code is root-owned and read-only for the bot user. At runtime the root fs is
