@@ -70,7 +70,19 @@ body::before {
 .seg button[aria-selected="true"], .seg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
 .seg button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-header.hero { padding-block: 40px 8px; }
+.news {
+  margin-top: 18px; background: var(--surface); border: 1px solid var(--line);
+  border-left: 3px solid var(--accent); border-radius: 10px; padding: 14px 16px;
+}
+.news-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.news-head h2 { font-size: 17px; margin: 0; }
+.news-head time { font: 400 12px/1 var(--mono); color: var(--muted); margin-left: auto; font-variant-numeric: tabular-nums; }
+.tag { font: 600 11px/1 var(--mono); color: var(--surface); background: var(--accent); padding: 4px 7px; border-radius: 5px; letter-spacing: .04em; }
+.news ul { margin: 10px 0 6px; }
+.news details { font-size: 13px; color: var(--muted); }
+.news summary { cursor: pointer; }
+.news details p { margin: 6px 0 0; }
+header.hero { padding-block: 28px 8px; }
 .eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
 h1 { font: 700 clamp(30px, 6vw, 44px)/1.1 var(--display); margin: 10px 0 12px; text-wrap: balance; letter-spacing: -.01em; }
 .lede { color: var(--muted); max-width: 62ch; margin: 0; font-size: 16px; }
@@ -145,6 +157,24 @@ footer { padding-block: 24px 40px; border-top: 1px solid var(--line); color: var
 </div>
 
 <div class="wrap">
+  <aside class="news" aria-labelledby="news-title">
+    <div class="news-head">
+      <span class="tag">v2.1</span>
+      <h2 id="news-title"><span class="en">What's new</span><span class="zh">版本更新</span></h2>
+      <time datetime="2026-11-13">2026-11-13</time>
+    </div>
+    <ul>
+      <li><span class="en"><b>New <code>/dev</code></b>: same as <code>/rule</code>, but the answer is posted for the whole channel. Costs 1 reply (free for Kurt).</span><span class="zh"><b>新增 <code>/dev</code></b>：和 <code>/rule</code> 一样，但回答公开发在频道里。扣 1 条余额（Kurt 不扣）。</span></li>
+      <li><span class="en"><b>Smarter <code>/rule</code></b>: it now reads the full reference (rules, mechanics, architecture, design reasons), so it can answer much more than the rules card.</span><span class="zh"><b><code>/rule</code> 更懂了</b>：现在会读完整说明（规则、机制、架构、设计原因），能回答的远不止规则卡上那些。</span></li>
+      <li><span class="en"><b>Files that actually arrive</b>: ask for a doc and you get an attachment: <code>.md</code> by default, <code>.html</code> for "give me HTML", <code>.txt</code> for plain text. "give me a md" and Chinese requests work too.</span><span class="zh"><b>文件真的能发出来了</b>：要文档就回附件：默认 <code>.md</code>，说 “give me HTML” 发 <code>.html</code>，要纯文本发 <code>.txt</code>。“give me a md” 和中文说法也能识别。</span></li>
+    </ul>
+    <details>
+      <summary><span class="en">Earlier versions</span><span class="zh">更早的版本</span></summary>
+      <p><b>v2.0 · 2026-11-13</b> — <span class="en">Self-written bot replaces llmcord: jump-ins, daily budget, <code>/rule</code>, <code>/feed</code>, file and link reading through a key-less fetcher, nightly recap and morning topics.</span><span class="zh">自写 bot 替换 llmcord：主动插话、每日余额、<code>/rule</code>、<code>/feed</code>、经无密钥 fetcher 读文件和链接、每晚总结和早上话题。</span></p>
+      <p><b>v1.0 · 2026-11-13</b> — <span class="en">First deploy: chat-only bot on llmcord behind an allowlist proxy.</span><span class="zh">首次部署：基于 llmcord 的纯聊天 bot，经白名单代理出网。</span></p>
+    </details>
+  </aside>
+
   <header class="hero">
     <div class="eyebrow">deepseekbot · discord</div>
     <h1><span class="en">The resident doomer</span><span class="zh">群里的厌世老哥</span></h1>
