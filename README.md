@@ -99,7 +99,7 @@ notepad .env
 | `SYSTEM_PROMPT` | 临时人设，一行，换行写 `\n`。留空就用 `prompts/default.txt` |
 | `STATUS_MESSAGE` | bot 的在线状态文字，留空不显示 |
 | `REPLY_BUDGET` / `BUDGET_RESET_TIME` | 每天可用的回复条数（50）和恢复时间（09:00） |
-| `RANDOM_CHANCE` / `BURST_COUNT` / `BURST_WINDOW_SECONDS` / `COOLDOWN_SECONDS` | 主动插话：每条消息 3% 概率；3 分钟超过 12 条；插话后冷却 10 分钟 |
+| `RANDOM_CHANCE` / `FX_TOPIC_CHANCE` / `BURST_COUNT` / `BURST_WINDOW_SECONDS` / `COOLDOWN_SECONDS` | 主动插话：每条消息 3% 概率，Houdini/FX 话题 5%；3 分钟超过 12 条；插话后冷却 10 分钟 |
 | `CONTEXT_MESSAGES` | 回复带多少条上下文（12） |
 | `SCHED_TZ` | 时区，默认 `Australia/Adelaide` |
 | `SUMMARY_TIME` / `TOPICS_TIME` | 每日总结（22:00）、早上话题（09:00） |

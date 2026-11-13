@@ -134,6 +134,7 @@ class Config:
     budget_reset_time: tuple = (9, 0)
     tz: ZoneInfo = field(default_factory=lambda: ZoneInfo("Australia/Adelaide"))
     random_chance: float = 0.03
+    fx_topic_chance: float = 0.05
     burst_count: int = 12
     burst_window_seconds: int = 180
     cooldown_seconds: int = 600
@@ -340,6 +341,23 @@ def sanitize_output(text):
     return EVERYONE_HERE_RE.sub("", text or "")
 
 
+# Whole-word English terms so short ones (fx, sop, vex) don't fire inside unrelated
+# words ("effective", "fxxk"). "flip" alone is too generic; only "flip sim/fluid".
+# Chinese terms are plain substrings.
+FX_TOPIC_RE = re.compile(
+    r"\b(?:houdini|sidefx|vex|vop|sop|dop|lop|pdg|pyro|vellum|rbd|karma|mantra|"
+    r"solaris|redshift|vfx|fx|nuke)\b"
+    r"|\bflip\s+(?:sim|fluid)\b"
+    r"|胡迪尼|特效|解算|模拟",
+    re.IGNORECASE,
+)
+
+
+def is_fx_topic(text) -> bool:
+    """True when a message is about Houdini / FX work; those get a higher jump-in chance."""
+    return bool(FX_TOPIC_RE.search(text or ""))
+
+
 def build_rules_card(config, remaining=None, blocked_names=None):
     """Short rules card for ``/rule``; never contains IDs or secrets."""
     total = config.reply_budget
@@ -353,7 +371,8 @@ def build_rules_card(config, remaining=None, blocked_names=None):
     lines = [
         "**how i work**",
         "- reply: mention me or reply to one of my messages and i'll answer. i also butt in "
-        f"on my own: ~{config.random_chance:.0%} per message, or when a channel fires off more "
+        f"on my own: ~{config.random_chance:.0%} per message (~{config.fx_topic_chance:.0%} "
+        "if it's Houdini/FX talk), or when a channel fires off more "
         f"than {config.burst_count} messages in {config.burst_window_seconds // 60} min — then i "
         f"cool off for {config.cooldown_seconds // 60} min.",
         f"- budget: {remaining}/{total} replies today, refills at {hh:02d}:{mm:02d} ({tz}). "
@@ -528,6 +547,7 @@ def load_config(environ=None):
         budget_reset_time=_parse_time(env, "BUDGET_RESET_TIME", "09:00"),
         tz=tz,
         random_chance=_parse_float(env, "RANDOM_CHANCE", 0.03),
+        fx_topic_chance=_parse_float(env, "FX_TOPIC_CHANCE", 0.05),
         burst_count=_parse_int(env, "BURST_COUNT", 12),
         burst_window_seconds=_parse_int(env, "BURST_WINDOW_SECONDS", 180),
         cooldown_seconds=_parse_int(env, "COOLDOWN_SECONDS", 600),
@@ -657,8 +677,11 @@ class Bot(discord.Client):
             )
             return
 
+        chance = cfg.random_chance
+        if is_fx_topic(message.content):
+            chance = max(cfg.random_chance, cfg.fx_topic_chance)
         if self.channel_activity.should_interject(
-            message.channel.id, cfg.random_chance, time.monotonic()
+            message.channel.id, chance, time.monotonic()
         ):
             await self.reply(
                 message,

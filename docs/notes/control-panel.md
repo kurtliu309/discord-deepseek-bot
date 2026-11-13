@@ -19,6 +19,7 @@ updated: 2026-11-13
 | 谁是主人 | `.env` 的 `OWNER_USER_ID`（只填 Kurt 自己） | `docker compose up -d` | 换人先问 Kurt：这决定谁能私信、谁能 `/feed` |
 | 每天回复条数 / 恢复时间 | `.env` 的 `REPLY_BUDGET`（50）、`BUDGET_RESET_TIME`（09:00） | `docker compose up -d` | “每天给 80 条” / “改成 10:00 恢复” |
 | 主动插话的概率 | `.env` 的 `RANDOM_CHANCE`（`0.03` = 3%） | `docker compose up -d` | “少插点话” / “改成 1%” |
+| Houdini/FX 话题的插话概率 | `.env` 的 `FX_TOPIC_CHANCE`（`0.05` = 5%） | `docker compose up -d` | “聊特效时多插点话” / “改成 8%” |
 | 刷屏时插话 | `.env` 的 `BURST_COUNT`（12）、`BURST_WINDOW_SECONDS`（180） | `docker compose up -d` | “大家聊快了别急着插” |
 | 插话后的冷却 | `.env` 的 `COOLDOWN_SECONDS`（600） | `docker compose up -d` | “插完话安静久一点” |
 | 回复带多少条上下文 | `.env` 的 `CONTEXT_MESSAGES`（12） | `docker compose up -d` | “记多几条再说” |

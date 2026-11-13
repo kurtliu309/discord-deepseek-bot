@@ -176,6 +176,32 @@ class TestDocRequest(unittest.TestCase):
             self.assertFalse(bot.looks_like_doc_request(s), s)
 
 
+class TestFxTopic(unittest.TestCase):
+    def test_fx_topics(self):
+        for s in ["anyone use houdini?", "my VEX is broken", "pyro sim keeps exploding",
+                  "这个特效怎么做", "flip sim looks off", "the SOP solver is cooked",
+                  "vellum sim again", "胡迪尼又崩了"]:
+            self.assertTrue(bot.is_fx_topic(s), s)
+
+    def test_not_fx_topics(self):
+        for s in ["I flipped my car", "effective plan", "fxxk this", "soprano singing",
+                  "dope track", "sim city", "", None]:
+            self.assertFalse(bot.is_fx_topic(s), s)
+
+
+class TestFxTopicConfig(unittest.TestCase):
+    def _config(self, extra=None):
+        env = {"DISCORD_BOT_TOKEN": "t", "DEEPSEEK_API_KEY": "k", "OWNER_USER_ID": "1"}
+        env.update(extra or {})
+        return bot.load_config(env)
+
+    def test_default(self):
+        self.assertEqual(self._config().fx_topic_chance, 0.05)
+
+    def test_override(self):
+        self.assertEqual(self._config({"FX_TOPIC_CHANCE": "0.1"}).fx_topic_chance, 0.1)
+
+
 class TestDevCharge(unittest.TestCase):
     def test_owner_free_others_pay(self):
         self.assertFalse(bot.should_charge_dev(1, 1))

@@ -159,17 +159,18 @@ footer { padding-block: 24px 40px; border-top: 1px solid var(--line); color: var
 <div class="wrap">
   <aside class="news" aria-labelledby="news-title">
     <div class="news-head">
-      <span class="tag">v2.1</span>
+      <span class="tag">v2.2</span>
       <h2 id="news-title"><span class="en">What's new</span><span class="zh">版本更新</span></h2>
       <time datetime="2026-11-13">2026-11-13</time>
     </div>
     <ul>
-      <li><span class="en"><b>New <code>/dev</code></b>: same as <code>/rule</code>, but the answer is posted for the whole channel. Costs 1 reply (free for Kurt).</span><span class="zh"><b>新增 <code>/dev</code></b>：和 <code>/rule</code> 一样，但回答公开发在频道里。扣 1 条余额（Kurt 不扣）。</span></li>
-      <li><span class="en"><b>Smarter <code>/rule</code></b>: it now reads the full reference (rules, mechanics, architecture, design reasons), so it can answer much more than the rules card.</span><span class="zh"><b><code>/rule</code> 更懂了</b>：现在会读完整说明（规则、机制、架构、设计原因），能回答的远不止规则卡上那些。</span></li>
-      <li><span class="en"><b>Files that actually arrive</b>: ask for a doc and you get an attachment: <code>.md</code> by default, <code>.html</code> for "give me HTML", <code>.txt</code> for plain text. "give me a md" and Chinese requests work too.</span><span class="zh"><b>文件真的能发出来了</b>：要文档就回附件：默认 <code>.md</code>，说 “give me HTML” 发 <code>.html</code>，要纯文本发 <code>.txt</code>。“give me a md” 和中文说法也能识别。</span></li>
+      <li><span class="en"><b>Backstory</b>: same doomer, now a senior film VFX artist of many years: strong on tech, loves movies, worn out by overtime.</span><span class="zh"><b>身世补充</b>：还是原来那个 doomer，现在是做了多年影视特效的 senior：技术强，爱电影，加班加得很累。</span></li>
+      <li><span class="en"><b>FX talk gets it talking</b>: messages about Houdini/FX now have a 5% jump-in chance instead of 3%.</span><span class="zh"><b>聊特效它更爱插嘴</b>：Houdini/FX 相关消息的插话概率升到 5%（其他还是 3%）。</span></li>
+      <li><span class="en"><b>Quieter recap</b>: the nightly recap no longer @mentions anyone, just names.</span><span class="zh"><b>总结不再 @ 人</b>：每晚总结只写名字，不再 @ 任何人。</span></li>
     </ul>
     <details>
       <summary><span class="en">Earlier versions</span><span class="zh">更早的版本</span></summary>
+      <p><b>v2.1 · 2026-11-13</b> — <span class="en">New <code>/dev</code>, a smarter <code>/rule</code> that reads the full reference, and file replies that actually arrive (<code>.md</code>, <code>.html</code>, <code>.txt</code>).</span><span class="zh">新增 <code>/dev</code>；<code>/rule</code> 更聪明，会读完整说明；文件回复真的能发出来（<code>.md</code>、<code>.html</code>、<code>.txt</code>）。</span></p>
       <p><b>v2.0 · 2026-11-13</b> — <span class="en">Self-written bot replaces llmcord: jump-ins, daily budget, <code>/rule</code>, <code>/feed</code>, file and link reading through a key-less fetcher, nightly recap and morning topics.</span><span class="zh">自写 bot 替换 llmcord：主动插话、每日余额、<code>/rule</code>、<code>/feed</code>、经无密钥 fetcher 读文件和链接、每晚总结和早上话题。</span></p>
       <p><b>v1.0 · 2026-11-13</b> — <span class="en">First deploy: chat-only bot on llmcord behind an allowlist proxy.</span><span class="zh">首次部署：基于 llmcord 的纯聊天 bot，经白名单代理出网。</span></p>
     </details>
@@ -203,6 +204,7 @@ footer { padding-block: 24px 40px; border-top: 1px solid var(--line); color: var
         <h2><span class="en">When it jumps in on its own</span><span class="zh">它什么时候自己插话</span></h2>
         <div class="facts">
           <div class="fact"><div class="n">3%</div><div class="l"><span class="en">chance on any message</span><span class="zh">每条消息的随机概率</span></div></div>
+          <div class="fact"><div class="n">5%</div><div class="l"><span class="en">on Houdini / FX messages</span><span class="zh">Houdini / FX 话题</span></div></div>
           <div class="fact"><div class="n">12 / 3 min</div><div class="l"><span class="en">more than 12 messages in 3 minutes</span><span class="zh">3 分钟内超过 12 条</span></div></div>
           <div class="fact"><div class="n">10 min</div><div class="l"><span class="en">cooldown per channel afterwards</span><span class="zh">之后该频道冷却</span></div></div>
         </div>
@@ -410,7 +412,7 @@ docker compose up -d --build</pre>
         </ol>
         <h3><span class="en">Jump-in</span><span class="zh">主动插话</span></h3>
         <ol class="flow">
-          <li><span class="en">Each human message updates a per-channel window; a 3% roll or more than 12 messages in 3 minutes triggers, unless the channel is cooling down.</span><span class="zh">每条真人消息更新该频道的时间窗口；3% 随机命中，或 3 分钟内超过 12 条就触发，冷却期间除外。</span></li>
+          <li><span class="en">Each human message updates a per-channel window; a 3% roll (5% for Houdini/FX talk) or more than 12 messages in 3 minutes triggers, unless the channel is cooling down.</span><span class="zh">每条真人消息更新该频道的时间窗口；3% 随机命中（Houdini/FX 话题 5%），或 3 分钟内超过 12 条就触发，冷却期间除外。</span></li>
           <li><span class="en">The model sees the last 12 messages numbered and answers <code>REPLY_TO: n</code> plus its message, or <code>SKIP</code> (refunded).</span><span class="zh">模型看到编号的最近 12 条消息，回答 <code>REPLY_TO: n</code> 加上它的话，或者回答 <code>SKIP</code>（退回余额）。</span></li>
           <li><span class="en">Sent as a Discord reply to message n with the reply ping switched off; the channel cools down for 10 minutes.</span><span class="zh">以 Discord 回复的形式接在第 n 条下面，关掉回复提醒；该频道冷却 10 分钟。</span></li>
         </ol>

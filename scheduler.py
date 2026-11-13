@@ -3,7 +3,7 @@
 
 - recap  (SUMMARY_TIME, default 22:00): read the last 24h of HUMAN messages in every text
   channel the bot can see, compress in chunks if long, write an English in-persona recap
-  (max 5 bullets, may @mention people) using the last 3 recaps + the group profile as
+  (max 5 bullets, names only, no @mentions) using the last 3 recaps + the group profile as
   context, post it to POST_CHANNEL_ID, save it to data/recaps/, then update the group profile.
 - topics (TOPICS_TIME, default 09:00): fetch fixed RSS feeds + Reddit via the keyless fetcher,
   let the model weigh them against the group profile and post 3 topics (at least 2 weird)
@@ -340,8 +340,8 @@ class Jobs:
             "=== today's chat (last 24h, humans only; each name is followed by their <@ID>) ===\n" + today + "\n\n"
             "Write the recap in English, in your usual voice, but actually useful: what people talked about, "
             "notable things people said, plans or decisions, the funniest moments. Group by topic, not by channel. "
-            "Exactly one line per point, at most 5 points, each starting with '- '. You may @mention people with "
-            "their <@ID> tag where it fits; otherwise use names. No 'direction' line, no header (it is added "
+            "Exactly one line per point, at most 5 points, each starting with '- '. Refer to people by their "
+            "names only; never write <@ID> tags or @mention anyone. No 'direction' line, no header (it is added "
             "for you), no closing remarks. Never include private info (addresses, phone numbers, passwords)."
         )
         body = await ask(persona(), task, max_tokens=800)
@@ -430,7 +430,7 @@ class Jobs:
                 if self.dry_run:
                     log(f"--- recap (dry run, not posted/saved) ---\n{text}")
                     return
-                await self.discord.post_message(self.channel, text, allow_users=True)
+                await self.discord.post_message(self.channel, text, allow_users=False)
                 log(f"posted recap ({len(text)} chars)")
                 self.memory.save_recap(dt.datetime.now(TZ).strftime("%Y-%m-%d"), text)
                 if today is not None:

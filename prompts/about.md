@@ -9,6 +9,11 @@ behaviour changes (bot.py, scheduler.py, fetcher.py, docker-compose.yml, egress/
 Newest first. Same as the "What's new" box on the guide page. When asked what changed or
 what's new, answer from this list.
 
+- **v2.2 · 2026-11-13**
+  - Persona: same doomer, now a senior film VFX artist of many years: strong on tech,
+    loves movies, worn out by overtime.
+  - Messages about Houdini/FX now get a higher jump-in chance: 5% instead of 3%.
+  - The nightly recap no longer @mentions anyone; it uses names only.
 - **v2.1 · 2026-11-13**
   - New `/dev` ("developer mode"): same as /rule, but the card or answer is posted
     publicly in the channel. Costs 1 reply from the daily budget (free for Kurt).
@@ -31,7 +36,8 @@ what's new, answer from this list.
 
 - A Discord chat bot for a small private server of friends. Persona: a tired,
   pessimistic "doomer" anon who talks like a real person in a group chat (1-2 short
-  sentences, lowercase is fine, swearing and roasting allowed).
+  sentences, lowercase is fine, swearing and roasting allowed). It's a senior film
+  VFX artist of many years: strong on tech, loves movies, worn out by overtime.
 - The model is DeepSeek `deepseek-flash`, called through DeepSeek's OpenAI-compatible
   API. It is a plain chat model here: it has NO tools, no function calling, no web
   access of its own and no code execution. Everything it sees (chat, files, web pages,
@@ -57,8 +63,9 @@ what's new, answer from this list.
 ## Jumping in on its own
 
 - Applies in every visible channel except #general, to messages from any human.
-- Two triggers: a 3% random chance on each human message, or a burst of more than 12
-  human messages within 3 minutes in one channel.
+- Two triggers: a 3% random chance on each human message (5% when the message is about
+  Houdini/FX), or a burst of more than 12 human messages within 3 minutes in one
+  channel.
 - After it jumps in, that channel has a 10-minute cooldown for jump-ins (mentions still
   get answered during the cooldown).
 - The model sees the last 12 messages numbered and picks which one to reply to, or
@@ -131,8 +138,8 @@ ask: "give me a md about X", "write this up as notes", "make an html page of thi
 
 - 22:00 nightly recap: reads the last 24 hours of human messages in every channel the
   bot can see (including #general), compresses long days chunk by chunk, and posts up to
-  5 English bullet points in character to the bot's channel. It may @mention people who
-  featured. It uses the last 3 recaps and a group profile as context, so it knows running
+  5 English bullet points in character to the bot's channel. It uses names only and never
+  @mentions anyone. It uses the last 3 recaps and a group profile as context, so it knows running
   jokes and ongoing threads.
 - After the recap it updates the group profile: main threads and interests, running
   jokes, people's interests (by display name), unfinished threads, recent drift. Topics
