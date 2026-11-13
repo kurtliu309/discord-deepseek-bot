@@ -215,7 +215,7 @@ footer { padding-block: 24px 40px; border-top: 1px solid var(--line); color: var
         </div>
         <ul>
           <li><span class="en">Up to <b>10 MB</b> per file and <b>3 files</b> per message. Very long files are cut off, and it tells you so.</span><span class="zh">单个文件最大 <b>10 MB</b>，一条消息最多 <b>3 个</b>。特别长的文件会被截断，它会告诉你。</span></li>
-          <li><span class="en">Ask explicitly for a document ("write this up as an md doc") and it replies with a <code>.md</code> file, up to about 5,000 words.</span><span class="zh">明确要文档（比如“写成 md 文档”），它会回一个 <code>.md</code> 文件，最长约 5000 个英文单词。</span></li>
+          <li><span class="en"><b>What it can send back:</b> plain chat messages, or, when you explicitly ask for a file, one attachment: <code>.md</code> by default ("give me a md about…"), <code>.html</code> if you ask for HTML or a web page, <code>.txt</code> if you ask for plain text. Up to about 5,000 words. No images, PDFs or Office files.</span><span class="zh"><b>它能发回什么：</b>普通聊天消息；或者在你明确要文件时发一个附件：默认 <code>.md</code>（“give me a md about…”），要 HTML 或网页就发 <code>.html</code>，要纯文本就发 <code>.txt</code>。最长约 5000 个英文单词。不能输出图片、PDF 或 Office 文件。</span></li>
           <li><span class="en">It can't touch anyone's computer. It only reads what you send in Discord.</span><span class="zh">它碰不到任何人的电脑，只读你在 Discord 里发给它的东西。</span></li>
         </ul>
       </section>
@@ -275,6 +275,7 @@ docker compose up -d --build</pre>
                 <tr><td class="mono">egress/</td><td><span class="en">Squid proxy: per-container allow rules</span><span class="zh">Squid 代理：按容器区分的放行规则</span></td></tr>
                 <tr><td class="mono">docker-compose.yml</td><td><span class="en">Four containers, two networks, all hardening</span><span class="zh">四个容器、两张网络和全部加固设置</span></td></tr>
                 <tr><td class="mono">prompts/default.txt</td><td><span class="en">The persona</span><span class="zh">人设</span></td></tr>
+                <tr><td class="mono">prompts/about.md</td><td><span class="en">Full reference the bot reads to answer <code>/rule</code> questions</span><span class="zh">完整说明，bot 回答 <code>/rule</code> 问题时读它</span></td></tr>
                 <tr><td class="mono">tests/</td><td><span class="en">Unit tests for budget, triggers and parsing</span><span class="zh">余额、触发和解析的单元测试</span></td></tr>
               </tbody>
             </table>

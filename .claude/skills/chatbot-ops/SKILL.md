@@ -95,6 +95,10 @@ function Set-EnvKey([string]$Key, [string]$Value) {
 
 改完看 `docker compose logs --tail 20 bot`（或 scheduler）有没有 `config error`。
 
+## `/rule` 的知识库
+
+`/rule <问题>` 回答时会读 `prompts/about.md`（英文完整说明：规则、机制、能输出的格式、架构、设计原因）。**改了任何功能或数字，都要同步改 `about.md` 和说明页 `docs/index.html`**，再 `docker compose build bot; docker compose up -d`。`about.md` 里不能出现 ID 或密钥（有单元测试检查）。
+
 ## 人设
 
 改 `prompts/default.txt`（保留最后的底线段落），然后 `docker compose up -d --build bot scheduler`。

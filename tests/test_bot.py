@@ -115,16 +115,78 @@ class TestExtractFileBlock(unittest.TestCase):
         self.assertIsNone(body)
         self.assertEqual(chat, "just some text")
 
-    def test_bad_filename(self):
-        chat, name, body = bot.extract_file_block(
-            "<<<FILE ../../evil.md>>>\nx\n<<<END FILE>>>"
-        )
-        self.assertIsNone(name)
-        self.assertIsNone(body)
+    def test_bad_filename_is_sanitised(self):
+        chat, name, body = bot.extract_file_block("<<<FILE ../../evil.md>>>\nx\n<<<END FILE>>>")
+        self.assertEqual(name, "evil.md")
+        self.assertNotIn("/", name)
+        self.assertEqual(body, "x")
 
         chat, name, body = bot.extract_file_block("<<<FILE notes.txt>>>\nx\n<<<END FILE>>>")
+        self.assertEqual(name, "notes.txt")  # txt is an allowed output type
+
+    def test_name_with_spaces_and_quotes(self):
+        chat, name, body = bot.extract_file_block('ok\n<<<FILE "My Cool Notes.md">>>\n# A\n<<<END FILE>>>')
+        self.assertEqual(name, "My-Cool-Notes.md")
+        self.assertEqual(chat, "ok")
+
+    def test_missing_name(self):
+        chat, name, body = bot.extract_file_block("<<<FILE>>>\n# A\n<<<END FILE>>>")
+        self.assertEqual(name, "doc.md")
+
+    def test_missing_end_marker(self):
+        chat, name, body = bot.extract_file_block("here\n<<<FILE guide.md>>>\n# Guide\nline two")
+        self.assertEqual(name, "guide.md")
+        self.assertEqual(body, "# Guide\nline two")
+        self.assertEqual(chat, "here")
+
+    def test_code_fence_inside_block(self):
+        chat, name, body = bot.extract_file_block(
+            "<<<FILE a.md>>>\n```markdown\n# Title\ntext\n```\n<<<END FILE>>>"
+        )
+        self.assertEqual(body, "# Title\ntext")
+
+    def test_empty_body_is_not_a_doc(self):
+        chat, name, body = bot.extract_file_block("<<<FILE a.md>>>\n<<<END FILE>>>")
         self.assertIsNone(name)
-        self.assertIsNone(body)
+
+
+class TestDocRequest(unittest.TestCase):
+    def test_detects_english_and_chinese(self):
+        for s in ["write me an md doc about vex", "make a markdown file", "can you write up notes",
+                  "give me a md", "give us md", "give me HTML", "make a web page of this",
+                  "把这个写成文档", "整理成笔记", "给我一个 md 文件", "做成网页"]:
+            self.assertTrue(bot.looks_like_doc_request(s), s)
+
+    def test_requested_ext(self):
+        self.assertEqual(bot.requested_ext("give me HTML"), "html")
+        self.assertEqual(bot.requested_ext("做成网页"), "html")
+        self.assertEqual(bot.requested_ext("as a txt please"), "txt")
+        self.assertEqual(bot.requested_ext("give me a md"), "md")
+
+    def test_html_block(self):
+        chat, name, body = bot.extract_file_block("<<<FILE page.html>>>\n<h1>x</h1>\n<<<END FILE>>>", "html")
+        self.assertEqual(name, "page.html")
+        chat, name, body = bot.extract_file_block("<<<FILE page>>>\n<h1>x</h1>\n<<<END FILE>>>", "html")
+        self.assertEqual(name, "page.html")
+        chat, name, body = bot.extract_file_block("<<<FILE evil.exe>>>\nx\n<<<END FILE>>>")
+        self.assertTrue(name.endswith(".md"))
+
+    def test_plain_chat_is_not_a_doc(self):
+        for s in ["how's your day", "lol this is cooked", "what do you think of houdini 21"]:
+            self.assertFalse(bot.looks_like_doc_request(s), s)
+
+
+class TestRuleSystem(unittest.TestCase):
+    def test_includes_reference_and_card(self):
+        s = bot.build_rule_system("CARD-TEXT", "REFERENCE-TEXT")
+        self.assertIn("CARD-TEXT", s)
+        self.assertIn("REFERENCE-TEXT", s)
+
+    def test_about_file_exists_and_has_no_ids(self):
+        about = bot.load_about()
+        self.assertGreater(len(about), 2000)
+        self.assertNotRegex(about, r"\d{17,20}")
+        self.assertIn("What it can output", about)
 
 
 class TestSplitMessage(unittest.TestCase):

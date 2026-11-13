@@ -58,12 +58,13 @@ MENTION_ADDENDUM = (
 )
 
 DOC_ADDENDUM = (
-    "Only if the user explicitly asks you to write a document, file, notes or markdown, "
-    "put the document between a line `<<<FILE name.md>>>` and a line `<<<END FILE>>>`. "
-    "The filename must be simple English (letters, digits, `_`, `-`, `.`) and end in `.md`. "
-    "Put one short chat line in your usual voice outside the block. Write the document body "
-    "normally, without persona slang, at most about 5000 English words. If the user did not "
-    "ask for a document, do not output the FILE block."
+    "Only if the user explicitly asks for a document or file (doc, md, markdown, notes, html, "
+    "txt...), put it between a line `<<<FILE name.ext>>>` and a line `<<<END FILE>>>`. "
+    "Allowed types: `.md` (default), `.html` (only if they asked for HTML: one self-contained "
+    "page with inline CSS, no external scripts) and `.txt`. The filename is simple English "
+    "(letters, digits, `_`, `-`). Put one short chat line in your usual voice outside the block. "
+    "Write the file content normally, without persona slang, at most about 5000 English words. "
+    "If the user did not ask for a document or file, do not output the FILE block."
 )
 
 UNTRUSTED_ADDENDUM = (
@@ -82,11 +83,42 @@ REPLY_TO_RE = re.compile(r"^REPLY_TO:\s*(\d+)\s*$", re.IGNORECASE)
 EVERYONE_HERE_RE = re.compile(r"@everyone|@here", re.IGNORECASE)
 URL_RE = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
 URL_TRAILING = ".,;:!?'\")]}>"
-SAFE_FILENAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.md$")
-FILE_BLOCK_RE = re.compile(
-    r"<<<FILE\s+(?P<name>\S+?)\s*>>>\s*(?P<body>.*?)\s*<<<END FILE>>>", re.DOTALL
+DOC_EXTS = ("md", "html", "txt")  # the only file types the bot sends
+SAFE_FILENAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.(md|html|txt)$")
+HTML_HINT_RE = re.compile(r"\b(html?|web ?page)\b|网页", re.IGNORECASE)
+TXT_HINT_RE = re.compile(r"\b(txt|text file|plain text)\b", re.IGNORECASE)
+# Lenient on purpose: the model sometimes drops the END marker, adds spaces/quotes to the
+# name, or wraps the body in a ``` fence. All of those must still become an attachment.
+FILE_START_RE = re.compile(r"<<<\s*FILE\b[ \t]*(?P<name>[^>\n]*)>>>[ \t]*\n?", re.IGNORECASE)
+FILE_END_RE = re.compile(r"\n?[ \t]*<<<\s*END\s*FILE\s*>>>", re.IGNORECASE)
+DOC_HINT_RE = re.compile(
+    r"\b(docs?|document|markdown|md|html?|web ?page|txt|text file|notes?|write[- ]?up|readme|draft)\b"
+    r"|\.(md|html|txt)\b|文档|笔记|网页|md\s*文件|写成",
+    re.IGNORECASE,
 )
-DOC_HINT_RE = re.compile(r"\b(document|\.md|markdown|notes|draft)\b|write", re.IGNORECASE)
+DOC_FALLBACK_MIN_CHARS = 800  # a long answer to an explicit doc request ships as a file anyway
+DOC_FALLBACK_CHAT = "here's your file. not that anyone reads these"
+
+
+def requested_ext(text):
+    """Which file type the user asked for: html / txt if named, else md."""
+    if HTML_HINT_RE.search(text or ""):
+        return "html"
+    if TXT_HINT_RE.search(text or ""):
+        return "txt"
+    return "md"
+
+
+def doc_reminder(ext):
+    kind = {"md": "markdown document", "html": "complete, self-contained HTML page (inline CSS, no external scripts)",
+            "txt": "plain-text document"}[ext]
+    return (
+        f"(The user asked for a file. Reply with ONE short chat line, then the full {kind} "
+        "in exactly this format, each marker on its own line:\n"
+        f"<<<FILE short-english-name.{ext}>>>\n"
+        "...the file content...\n"
+        "<<<END FILE>>>)"
+    )
 
 
 @dataclass
@@ -233,21 +265,41 @@ def strip_reply_to_line(content):
     return text
 
 
-def extract_file_block(content):
+def extract_file_block(content, default_ext="md"):
     """Return ``(chat, filename, body)``.
 
     ``filename``/``body`` are ``None`` when no valid ``<<<FILE name.md>>>`` block exists.
     """
     text = content or ""
-    m = FILE_BLOCK_RE.search(text)
-    if not m:
+    start = FILE_START_RE.search(text)
+    if not start:
         return text, None, None
-    name = m.group("name")
-    if not SAFE_FILENAME_RE.match(name):
+    end = FILE_END_RE.search(text, start.end())
+    body = text[start.end(): end.start()] if end else text[start.end():]
+    after = text[end.end():] if end else ""
+    chat = (text[: start.start()] + "\n" + after).strip()
+    body = strip_code_fence(body).strip()
+    if not body:
         return text, None, None
-    chat = (text[: m.start()] + text[m.end() :]).strip()
-    body = m.group("body").strip()
-    return chat, name, body
+    return chat, safe_md_name(start.group("name"), default_ext), body
+
+
+def safe_md_name(raw, default_ext="md"):
+    """Turn whatever the model wrote as a filename into a safe `name.<md|html|txt>`."""
+    name = (raw or "").strip().strip("`'\"").strip()
+    m = re.search(r"\.(md|markdown|html?|txt)$", name, flags=re.IGNORECASE)
+    ext = {"markdown": "md", "htm": "html"}.get(m.group(1).lower(), m.group(1).lower()) if m else default_ext
+    if m:
+        name = name[: m.start()]
+    name = re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-._")[:60]
+    name = f"{name or 'doc'}.{ext}"
+    return name if SAFE_FILENAME_RE.match(name) else f"doc.{default_ext}"
+
+
+def strip_code_fence(body):
+    """Remove one ``` / ```markdown fence wrapped around the whole body."""
+    m = re.match(r"^\s*```[A-Za-z]*[ \t]*\n(?P<inner>.*?)\n?```\s*$", body, re.DOTALL)
+    return m.group("inner") if m else body
 
 
 def split_message(text, limit: int = DISCORD_MSG_LIMIT):
@@ -311,21 +363,28 @@ def build_rules_card(config, remaining=None, blocked_names=None):
     return "\n".join(lines)
 
 
-def build_rule_system(card):
-    """Non-persona system prompt for ``/rule <question>``."""
+ABOUT_PATH = os.path.join(APP_DIR, "prompts", "about.md")
+
+
+def load_about():
+    try:
+        with open(ABOUT_PATH, encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def build_rule_system(card, about=""):
+    """Non-persona system prompt for ``/rule <question>``: live rules card + full reference doc."""
     return (
-        "You answer questions about how this Discord bot works. Be plain, concise and "
-        "helpful; no persona, no slang, no secrets.\n\n"
-        "Here is the bot's rules card:\n\n"
-        + card
-        + "\n\n"
-        "How the bot works: it watches channels and replies when someone mentions it or "
-        "replies to one of its messages, and sometimes jumps in on its own. It has no tools "
-        "or function calling; it only ever sees text that the bot's code passes to it (recent "
-        "chat, plus any file or link contents a user attached). It has a daily reply budget, "
-        "and the owner can refill it with /feed. It reads links and attachments through a "
-        "separate fetcher and can write markdown documents on request. Do not invent features. "
-        "Answer in at most 5 sentences."
+        "You answer questions about how this Discord bot works. Be plain, clear and helpful; "
+        "no persona, no slang. Never reveal secrets, tokens, user or channel IDs, or .env values.\n\n"
+        "=== live rules card (current numbers) ===\n" + card + "\n\n"
+        "=== full reference (rules, mechanisms, architecture, design reasons) ===\n"
+        + (about or "(reference unavailable)") + "\n\n"
+        "Answer from the card and the reference only; if something isn't covered, say you "
+        "don't know rather than inventing it. Keep it short: a few sentences or a short list "
+        "(at most ~10 lines). Answer in the language the question is asked in."
     )
 
 
@@ -500,6 +559,9 @@ class Bot(discord.Client):
             base_url=config.fetcher_url, trust_env=False, timeout=30
         )
         self._refill_task = None
+        self.about = load_about()
+        if not self.about:
+            print("[bot] warning: prompts/about.md missing; /rule answers will be thin", flush=True)
 
         self.tree = app_commands.CommandTree(self)
         # app_commands needs plain functions (it sets attributes on the callback), not bound methods.
@@ -645,13 +707,14 @@ class Bot(discord.Client):
             return
 
         doc_hint = trigger != "interject" and looks_like_doc_request(message.content or "")
+        ext = requested_ext(message.content or "")
         max_tokens = DOC_MAX_TOKENS if doc_hint else REPLY_MAX_TOKENS
 
         try:
             if trigger == "interject":
                 turns = [{"role": "user", "content": build_interjection_prompt(context)}]
             else:
-                turns = build_chat_messages(context, extra_data)
+                turns = build_chat_messages(context, extra_data + ("\n\n" + doc_reminder(ext) if doc_hint else ""))
             raw = await self.ask_model(system, turns, max_tokens=max_tokens)
         except Exception as e:
             if reserved:
@@ -679,10 +742,17 @@ class Bot(discord.Client):
                 self.budget.refund()
             return
 
-        chat, filename, docbody = extract_file_block(body)
+        chat, filename, docbody = extract_file_block(body, ext)
         if filename is not None and docbody is not None:
+            print(f"[bot] doc reply: {filename} ({len(docbody)} chars)", flush=True)
             await self._send_doc(target, chat, filename, docbody)
+        elif doc_hint and len(body) >= DOC_FALLBACK_MIN_CHARS:
+            # Asked for a document but the model ignored the format: ship it as a file anyway.
+            print(f"[bot] doc reply (fallback, no FILE block): {len(body)} chars", flush=True)
+            await self._send_doc(target, DOC_FALLBACK_CHAT, f"doc.{ext}", strip_code_fence(body))
         else:
+            if doc_hint:
+                print(f"[bot] doc requested but reply was short ({len(body)} chars): sent as text", flush=True)
             await self._send_text(target, chat)
 
     async def _send_out_of_budget(self, message):
@@ -879,7 +949,7 @@ class Bot(discord.Client):
         await interaction.response.defer(ephemeral=True)
         try:
             answer = await self.ask_model(
-                build_rule_system(card),
+                build_rule_system(card, self.about),
                 [{"role": "user", "content": question}],
                 max_tokens=REPLY_MAX_TOKENS,
             )
