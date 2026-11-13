@@ -10,7 +10,7 @@ Endpoints (JSON in / JSON out, listen on :8080):
   POST /url              {"url": str}                      -> {"ok", "title", "text", "truncated"} | {"ok": false, "error"}
   POST /file?name=<fn>   raw bytes (<= 10 MB)               -> same shape
   POST /rss              {"feeds": [{"name","url"}], "per_feed": int}   -> {"items": [{"source","title","link","summary"}]}
-  POST /reddit           {"subs": [str], "per_sub": int}    -> {"items": [...]}  (NSFW posts skipped)
+                         (Reddit uses its public RSS feeds through /rss; requests to one host are spaced out)
   GET  /health                                              -> {"ok": true}
 """
 
@@ -20,6 +20,7 @@ import json
 import os
 import re
 import sys
+import time
 import zipfile
 from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -195,12 +196,29 @@ def fetch_url(url):
     return {"ok": True, "title": title[:300], "text": text, "truncated": truncated}
 
 
+def polite_download(url, last_host):
+    """download() that spaces out requests to the same host and honours one 429 Retry-After."""
+    host = urlparse(url).hostname
+    if host == last_host:
+        time.sleep(5)
+    try:
+        return download(url)
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code != 429:
+            raise
+        wait = min(int(e.response.headers.get("retry-after", "10") or 10), 30)
+        log(f"429 from {host}: waiting {wait}s, then one retry")
+        time.sleep(wait)
+        return download(url)
+
+
 def fetch_rss(feeds, per_feed):
     import feedparser
-    items = []
+    items, last_host = [], None
     for f in feeds:
         try:
-            data, _, _ = download(f["url"])
+            data, _, _ = polite_download(f["url"], last_host)
+            last_host = urlparse(f["url"]).hostname
             parsed = feedparser.parse(data)
             for e in parsed.entries[:per_feed]:
                 summary = html_to_text(e.get("summary", ""))[1][:300]
@@ -208,27 +226,6 @@ def fetch_rss(feeds, per_feed):
                               "link": e.get("link", ""), "summary": summary})
         except Exception as ex:
             log(f"rss {f.get('name')}: {type(ex).__name__}: {ex}")
-    return items
-
-
-def fetch_reddit(subs, per_sub):
-    items = []
-    for sub in subs:
-        if not re.match(r"^[A-Za-z0-9_]{2,30}$", sub):
-            continue
-        try:
-            data, _, _ = download(f"https://www.reddit.com/r/{sub}/hot.json?limit={per_sub + 5}&raw_json=1")
-            for child in json.loads(data)["data"]["children"]:
-                d = child["data"]
-                if d.get("over_18") or d.get("stickied"):
-                    continue
-                items.append({"source": f"r/{sub}", "title": d.get("title", "")[:300],
-                              "link": "https://www.reddit.com" + d.get("permalink", ""),
-                              "summary": (d.get("selftext") or "")[:300]})
-                if sum(1 for i in items if i["source"] == f"r/{sub}") >= per_sub:
-                    break
-        except Exception as ex:
-            log(f"reddit {sub}: {type(ex).__name__}: {ex}")
     return items
 
 
@@ -263,9 +260,6 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/rss":
                 req = json.loads(body)
                 return self._send(200, {"items": fetch_rss(req.get("feeds", []), int(req.get("per_feed", 5)))})
-            if u.path == "/reddit":
-                req = json.loads(body)
-                return self._send(200, {"items": fetch_reddit(req.get("subs", []), int(req.get("per_sub", 5)))})
             self._send(404, {"ok": False, "error": "not found"})
         except ValueError as e:
             self._send(200, {"ok": False, "error": str(e) or "bad input"})

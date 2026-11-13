@@ -59,6 +59,17 @@ FEEDS = [
 ]
 WEIRD_SUBS = ["nottheonion", "Showerthoughts", "mildlyinfuriating", "oddlyterrifying", "AskReddit", "NoStupidQuestions"]
 OTHER_SUBS = ["popular", "Houdini", "vfx", "LocalLLaMA"]
+# Reddit's public RSS feeds (its JSON endpoint 403s anonymous clients). RSS has no NSFW flag,
+# so only SFW subreddits belong in these lists (r/popular already excludes NSFW).
+
+
+def reddit_feeds():
+    # One combined ("multireddit") feed per group: 2 requests a day instead of 10, so we stay
+    # well inside Reddit's rate limit (it answers 429 to bursts of separate requests).
+    return [
+        {"name": "reddit-weird", "url": "https://www.reddit.com/r/" + "+".join(WEIRD_SUBS) + "/hot/.rss?limit=40"},
+        {"name": "reddit", "url": "https://www.reddit.com/r/" + "+".join(OTHER_SUBS) + "/hot/.rss?limit=30"},
+    ]
 
 
 def env(name, default=""):
@@ -332,13 +343,13 @@ class Jobs:
 
     async def topics(self):
         feeds = await fetcher_post("/rss", {"feeds": [{"name": n, "url": u} for n, u in FEEDS], "per_feed": 6})
-        reddit = await fetcher_post("/reddit", {"subs": WEIRD_SUBS + OTHER_SUBS, "per_sub": 6})
+        reddit = await fetcher_post("/rss", {"feeds": reddit_feeds(), "per_feed": 30})
         log(f"material: {len(feeds)} feed items, {len(reddit)} reddit posts")
 
         def fmt(items):
             return "\n".join(f"- [{i['source']}] {i['title']} | {i['link']}" + (f" | {i['summary'][:160]}" if i.get("summary") else "") for i in items)
 
-        weird = [i for i in reddit if i["source"].removeprefix("r/") in WEIRD_SUBS]
+        weird = [i for i in reddit if i["source"] == "reddit-weird"]
         other = [i for i in reddit if i not in weird]
         task = (
             "This is your morning job: drop conversation starters for the group.\n\n"
