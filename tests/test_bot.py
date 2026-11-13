@@ -176,6 +176,12 @@ class TestDocRequest(unittest.TestCase):
             self.assertFalse(bot.looks_like_doc_request(s), s)
 
 
+class TestDevCharge(unittest.TestCase):
+    def test_owner_free_others_pay(self):
+        self.assertFalse(bot.should_charge_dev(1, 1))
+        self.assertTrue(bot.should_charge_dev(2, 1))
+
+
 class TestRuleSystem(unittest.TestCase):
     def test_includes_reference_and_card(self):
         s = bot.build_rule_system("CARD-TEXT", "REFERENCE-TEXT")

@@ -48,7 +48,8 @@ behaviour changes (bot.py, scheduler.py, fetcher.py, docker-compose.yml, egress/
 
 - 50 replies per day, shared by everyone. Mention replies, jump-ins and replies that
   read files or links each cost 1.
-- Free: everything Kurt sends (his mentions and DMs), and /rule.
+- Free: everything Kurt sends (his mentions, DMs and /dev), and /rule. /dev costs 1 for
+  everyone else.
 - Refills every day at 09:00 Australia/Adelaide time. Kurt can refill it any time with
   /feed. The budget lives in the bot's memory, so restarting the bot also refills it.
 - When it runs out, the next person who mentions it gets one "out of juice. ask kurt to
@@ -60,6 +61,10 @@ behaviour changes (bot.py, scheduler.py, fetcher.py, docker-compose.yml, egress/
 - `/rule` — short rules card plus budget left. Only the person who ran it sees it.
 - `/rule <question>` — ask anything about how the bot works; answered plainly without the
   persona, only visible to the asker.
+- `/dev` and `/dev <question>` — "developer mode": exactly like /rule, but the card or
+  answer is posted publicly in the channel (with the question shown on top) so everyone
+  can read it. Costs 1 unit of the daily budget for everyone except Kurt; if the budget
+  is empty, only the asker is told. Not available in #general.
 - `/feed` — Kurt only; refills the daily budget. Anyone else gets "nope".
 
 ## Files and links
@@ -92,6 +97,7 @@ behaviour changes (bot.py, scheduler.py, fetcher.py, docker-compose.yml, egress/
 | Chat message | normal replies, jump-ins, recaps, topics | plain Discord text (no embeds); anything over 2,000 characters is split into several messages |
 | File attachment | only when explicitly asked for a document or file | one file per reply plus a short chat line: `.md` by default, `.html` when HTML / a web page is asked for (one self-contained page, inline CSS, no external scripts), `.txt` when plain text is asked for |
 | Ephemeral message | /rule, /feed | plain text only the asker can see |
+| Public explanation | /dev | the same card or answer as /rule, posted to the channel |
 
 It cannot output images, PDFs, Word/Excel/PowerPoint files, audio, standalone code files
 (code goes inside a .md or .txt file), or anything saved to someone's computer. Ways to

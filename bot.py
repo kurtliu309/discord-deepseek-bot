@@ -194,6 +194,11 @@ def should_charge(trigger: str, author_id: int, owner_id: int) -> bool:
     return trigger == "mention"
 
 
+def should_charge_dev(author_id: int, owner_id: int) -> bool:
+    """/dev posts publicly, so it costs one budget unit for everyone except the owner."""
+    return author_id != owner_id
+
+
 class ChannelActivity:
     """Per-channel burst tracking and interjection cooldown."""
 
@@ -358,7 +363,8 @@ def build_rules_card(config, remaining=None, blocked_names=None):
         "- i can read attachments (txt/md/csv/json/yaml/log, code, usda, pdf/docx/xlsx/pptx; "
         "up to 10 MB each, 3 per message) and links you drop.",
         "- DMs: only kurt gets a reply.",
-        "ask me anything, e.g. `/rule why did you jump in?`",
+        "ask me anything, e.g. `/rule why did you jump in?` (only you see it), "
+        "or `/dev <question>` to answer in front of the whole channel (costs 1 reply).",
     ]
     return "\n".join(lines)
 
@@ -573,6 +579,11 @@ class Bot(discord.Client):
         @app_commands.describe(question="Ask how the bot works")
         async def rule_cmd(interaction: discord.Interaction, question: Optional[str] = None):
             await self.rule(interaction, question)
+
+        @self.tree.command(name="dev", description="Like /rule, but posted to the whole channel.")
+        @app_commands.describe(question="Ask how the bot works (everyone sees the answer)")
+        async def dev_cmd(interaction: discord.Interaction, question: Optional[str] = None):
+            await self.dev(interaction, question)
 
     # -- startup / teardown ------------------------------------------------- #
 
@@ -935,18 +946,38 @@ class Bot(discord.Client):
         await interaction.response.send_message("fed. budget's full again.", ephemeral=True)
 
     async def rule(self, interaction: discord.Interaction, question: Optional[str] = None):
+        await self._explain(interaction, question, public=False)
+
+    async def dev(self, interaction: discord.Interaction, question: Optional[str] = None):
+        await self._explain(interaction, question, public=True)
+
+    async def _explain(self, interaction, question, public: bool):
+        """/rule (only the asker sees it, free) and /dev (posted to the channel).
+
+        /dev costs one budget unit for everyone but the owner, so it can't be used to spam
+        the channel for free; when the budget is empty only the asker is told.
+        """
         if interaction.guild is not None and self._is_blocked(interaction.channel):
             await interaction.response.send_message("not here", ephemeral=True)
             return
 
-        blocked_names = self._blocked_names(interaction.guild)
-        card = build_rules_card(self.config, self.budget.remaining, blocked_names)
-
-        if not question:
-            await interaction.response.send_message(card, ephemeral=True)
+        charged = public and should_charge_dev(interaction.user.id, self.config.owner_id)
+        if charged and not self.budget.spend():
+            await interaction.response.send_message(OUT_OF_BUDGET_NOTICE, ephemeral=True)
             return
 
-        await interaction.response.defer(ephemeral=True)
+        ephemeral = not public
+        blocked_names = self._blocked_names(interaction.guild)
+        card = build_rules_card(self.config, self.budget.remaining, blocked_names)
+        header = f"**/dev** {question}\n" if public and question else ("**/dev**\n" if public else "")
+
+        if not question:
+            await interaction.response.send_message(
+                header + card, ephemeral=ephemeral, allowed_mentions=discord.AllowedMentions.none()
+            )
+            return
+
+        await interaction.response.defer(ephemeral=ephemeral, thinking=True)
         try:
             answer = await self.ask_model(
                 build_rule_system(card, self.about),
@@ -954,11 +985,16 @@ class Bot(discord.Client):
                 max_tokens=REPLY_MAX_TOKENS,
             )
         except Exception as e:
+            if charged:
+                self.budget.refund()
             print(f"[bot] {type(e).__name__}: {e}", flush=True)
             await interaction.followup.send("can't answer that right now.", ephemeral=True)
             return
         answer = sanitize_output(answer or "").strip() or "dunno."
-        await interaction.followup.send(answer, ephemeral=True)
+        for i, chunk in enumerate(split_message(header + answer)):
+            await interaction.followup.send(
+                chunk, ephemeral=ephemeral, allowed_mentions=discord.AllowedMentions.none()
+            )
 
     def _blocked_names(self, guild):
         names = []
