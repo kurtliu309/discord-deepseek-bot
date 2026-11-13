@@ -49,20 +49,21 @@ TEXT = {
         "quiet_line": "安静频道：{channels}",
         "recap_line": "回顾：{state}　{channel}　{time}",
         "topics_line": "话题：{state}　{channel}　{time}",
+        "news_line": "新闻：{state}　{channel}　{time}　{items} 条",
         "consent_line": "隐私确认：{state}",
         "consent_yes": "已同意",
         "consent_no": "未同意",
         "tools_line": "工具调用：{status}",
         "tools_ok": "可用（owner 群）",
         "tools_unavailable": "不可用（public 群不能开）",
-        "page_hint": "第 1 页改基础项；第 2 页改频道和定时；第 3 页改名单和默认语言。改完点「保存」立即生效。",
+        "page_hint": "第 1 页：基础设置　第 2 页：频道和定时（回顾、话题、新闻）　第 3 页：名单。"
+        "点下面的页码切换，改完点「保存」生效。",
         "blocked_line": "黑名单：{names}",
         "admins_line": "管理员：{names}",
         "owner_only": "只有主人能改",
         "owner_only_line": "信任等级和管理员名单只有主人能改。",
         "select_blocked": "黑名单（不回复这些人的消息）",
         "select_admins": "管理员（可以改设置）",
-        "btn_members": "成员名单",
         "dm_changed_header": "{guild} 的设置被 {user} 改了：",
         "unknown_user": "<未知用户>",
         "on": "开",
@@ -77,21 +78,20 @@ TEXT = {
         "select_language": "默认语言",
         "quiet_placeholder": "安静频道（可多选；我不会在这些频道说话）",
         "recap_placeholder": "回顾频道（当前：{channel}）",
-        "topics_placeholder": "话题频道（当前：{channel}）",
+        "topics_placeholder": "话题频道（当前：{channel}；话题和新闻都发这里）",
         "btn_budget": "每日额度",
         "btn_interject": "插话设置",
-        "btn_more": "更多设置",
         "btn_save": "保存",
         "btn_cancel": "取消",
         "btn_recap": "回顾设置",
         "btn_topics": "话题设置",
         "btn_consent": "隐私确认",
-        "btn_back": "返回",
+        "btn_page": "第 {page} 页",
         "btn_language": "English",
         "modal_budget": "每日额度",
         "modal_interject": "插话设置",
         "modal_recap": "每晚回顾",
-        "modal_topics": "每日话题",
+        "modal_topics": "每日话题和新闻",
         "field_replies": "每天回复条数（群）",
         "field_replies_per_user": "每人每天回复条数",
         "field_lookups": "每天查询次数（群，v3.1 预留）",
@@ -99,6 +99,9 @@ TEXT = {
         "field_switch": "开关（开/关）",
         "field_chance": "概率（百分比，0-100）",
         "field_time": "时间（HH:MM）",
+        "field_news_switch": "新闻开关（开/关）",
+        "field_news_time": "新闻时间（HH:MM）",
+        "field_news_items": "新闻条数（1-50）",
         "err_persona_missing": "人设 {persona} 不存在（缺 character.md），没有保存。",
         "err_save": "保存失败：{error}",
         "err_language": "切换语言失败：{error}",
@@ -106,6 +109,8 @@ TEXT = {
         "err_switch": "开关只能填「开」或「关」",
         "err_percent": "概率要在 0-100 之间（百分比）",
         "err_time": "时间要写成 HH:MM，例如 22:00",
+        "err_items": "新闻条数要写成 1-50 的整数。",
+        "err_news_channel": "新闻开着，得先在第 2 页选话题频道（新闻也发在那里）。",
         "perm_no_manage": "你需要「管理服务器」权限才能用 /setup。",
         "perm_not_owner": "只有 bot 的主人或本群管理员能用 /setup。",
         "dm_only": "只能在服务器里用 /setup；私信不用设置。",
@@ -125,21 +130,21 @@ TEXT = {
         "quiet_line": "Quiet channels: {channels}",
         "recap_line": "Recap: {state} · {channel} · {time}",
         "topics_line": "Topics: {state} · {channel} · {time}",
+        "news_line": "News: {state} · {channel} · {time} · {items} items",
         "consent_line": "Privacy consent: {state}",
         "consent_yes": "given",
         "consent_no": "not given",
         "tools_line": "Tool calls: {status}",
         "tools_ok": "available (owner server)",
         "tools_unavailable": "unavailable (public servers cannot enable it)",
-        "page_hint": "Page 1: basics. Page 2: channels and schedules. Page 3: lists and the language. "
-        "Press Save to apply.",
+        "page_hint": "Page 1: basics. Page 2: channels and schedules (recap, topics, news). "
+        "Page 3: lists. Use the page buttons below to switch; press Save to apply.",
         "blocked_line": "Blocked: {names}",
         "admins_line": "Admins: {names}",
         "owner_only": "Only the owner can change this",
         "owner_only_line": "Only the owner can change the trust level and the admin list.",
         "select_blocked": "Blocked users (I won't reply to them)",
         "select_admins": "Admins (can change settings)",
-        "btn_members": "Members",
         "dm_changed_header": "{guild}'s settings were changed by {user}:",
         "unknown_user": "unknown user",
         "on": "on",
@@ -154,21 +159,20 @@ TEXT = {
         "select_language": "Bot language",
         "quiet_placeholder": "Quiet channels (pick any; I won't talk in them)",
         "recap_placeholder": "Recap channel (now: {channel})",
-        "topics_placeholder": "Topics channel (now: {channel})",
+        "topics_placeholder": "Topics channel (now: {channel}; topics and news both go here)",
         "btn_budget": "Daily budget",
         "btn_interject": "Interjections",
-        "btn_more": "More settings",
         "btn_save": "Save",
         "btn_cancel": "Cancel",
         "btn_recap": "Recap settings",
         "btn_topics": "Topics settings",
         "btn_consent": "Privacy consent",
-        "btn_back": "Back",
+        "btn_page": "Page {page}",
         "btn_language": "中文",
         "modal_budget": "Daily budget",
         "modal_interject": "Interjections",
         "modal_recap": "Nightly recap",
-        "modal_topics": "Daily topics",
+        "modal_topics": "Daily topics & news",
         "field_replies": "Replies per day (server)",
         "field_replies_per_user": "Replies per person per day",
         "field_lookups": "Lookups per day (server, reserved for v3.1)",
@@ -176,6 +180,9 @@ TEXT = {
         "field_switch": "On/off",
         "field_chance": "Chance (percent, 0-100)",
         "field_time": "Time (HH:MM)",
+        "field_news_switch": "News on/off",
+        "field_news_time": "News time (HH:MM)",
+        "field_news_items": "News items (1-50)",
         "err_persona_missing": "Persona {persona} not found (no character.md); nothing was saved.",
         "err_save": "Save failed: {error}",
         "err_language": "Could not switch language: {error}",
@@ -183,6 +190,9 @@ TEXT = {
         "err_switch": "On/off must be either 开 or 关 (on/off).",
         "err_percent": "The chance must be between 0 and 100 (percent).",
         "err_time": "Time must be HH:MM, e.g. 22:00.",
+        "err_items": "News items must be a whole number from 1 to 50.",
+        "err_news_channel": "News is on, so pick the topics channel on page 2 first "
+        "(news goes there too).",
         "perm_no_manage": "You need the Manage Server permission to use /setup.",
         "perm_not_owner": "Only the bot's owner or a server admin can use /setup.",
         "dm_only": "/setup only works inside a server; DMs need no setup.",
@@ -331,6 +341,24 @@ def parse_time(value, lang: str = DEFAULT_LANGUAGE) -> str:
     return s
 
 
+def parse_items(value, lang: str = DEFAULT_LANGUAGE) -> int:
+    """How many news items per post (1-50, matching ``NewsSettings.items``)."""
+    try:
+        n = int(str(value or "").strip())
+    except ValueError:
+        raise ValueError(t(lang, "err_items")) from None
+    if n < 1 or n > 50:
+        raise ValueError(t(lang, "err_items"))
+    return n
+
+
+def news_channel_error(form, lang: str = DEFAULT_LANGUAGE):
+    """Why news cannot be on yet, or ``None``: news goes to the topics channel."""
+    if form.news_on and form.topics_channel is None:
+        return t(lang, "err_news_channel")
+    return None
+
+
 @dataclass
 class SetupForm:
     """The editable subset of one guild config shown in the menu."""
@@ -352,6 +380,9 @@ class SetupForm:
     topics_on: bool = False
     topics_channel: int | None = None
     topics_time: str = "09:00"
+    news_on: bool = False
+    news_time: str = "09:00"
+    news_items: int = 5
     consent: bool = False
     blocked_users: list = field(default_factory=list)
     admins: list = field(default_factory=list)
@@ -376,6 +407,9 @@ def form_from_config(cfg: g.GuildConfig) -> SetupForm:
         topics_on=bool(cfg.features.topics.on),
         topics_channel=cfg.features.topics.channel,
         topics_time=cfg.features.topics.time,
+        news_on=bool(cfg.features.news.on),
+        news_time=cfg.features.news.time,
+        news_items=cfg.features.news.items,
         consent=bool(cfg.consent),
         blocked_users=list(cfg.blocked_users),
         admins=list(cfg.admins),
@@ -388,6 +422,7 @@ def apply_form(
     *,
     is_owner: bool = True,
     owner_id=None,
+    lang: str = DEFAULT_LANGUAGE,
 ) -> g.GuildConfig:
     """Merge the form into ``base`` (keeping fields the menu doesn't show) and validate.
 
@@ -431,6 +466,18 @@ def apply_form(
         block["channel"] = int(channel) if channel is not None else None
         block["time"] = time_value
 
+    # News is edited inside the topics modal and has no channel of its own: it
+    # always posts to the topics channel, so it cannot be on without one. Only
+    # on/time/items/channel are touched; the rest of NewsSettings stays as it was.
+    error = news_channel_error(form, lang)
+    if error:
+        raise g.ConfigError(error)
+    news = data["features"]["news"]
+    news["on"] = bool(form.news_on)
+    news["channel"] = int(form.topics_channel) if form.topics_channel is not None else None
+    news["time"] = form.news_time
+    news["items"] = int(form.news_items)
+
     if not tools_available(data["trust"]):
         data["features"]["tools"]["on"] = False
 
@@ -445,9 +492,10 @@ def save_form(
     *,
     is_owner: bool = True,
     owner_id=None,
+    lang: str = DEFAULT_LANGUAGE,
 ) -> g.GuildConfig:
     """Validate + write config.yaml; the store cache updates immediately."""
-    cfg = apply_form(base, form, is_owner=is_owner, owner_id=owner_id)
+    cfg = apply_form(base, form, is_owner=is_owner, owner_id=owner_id, lang=lang)
     store.save(guild_id, cfg)
     return cfg
 
@@ -589,10 +637,11 @@ def display_name(user) -> str:
 class SetupView(discord.ui.View):
     """Three ephemeral pages; every change edits the same message in place.
 
-    Discord allows five action rows and five buttons per row, so page 1 is three
-    selects plus a button row and the language toggle, page 2 is three channel
-    selects plus a five-button row and the toggle, and page 3 is the two member
-    lists, the language select, a button row and the toggle.
+    Discord allows five action rows and five buttons per row, so every page is its
+    selects plus one action row and one navigation row. The navigation row is
+    ``[Page 1] [Page 2] [Page 3] [English]`` on all three pages; the page you are
+    on is disabled and primary, and the rest jump straight there with the form's
+    unsaved edits intact.
 
     ``is_owner`` gates the two owner-only controls (trust level and the admin
     list): they are disabled for admins and forced back on save anyway.
@@ -699,6 +748,9 @@ class SetupView(discord.ui.View):
               channel=self._channel_name(f.recap_channel), time=f.recap_time),
             t(lang, "topics_line", state=flag(f.topics_on),
               channel=self._channel_name(f.topics_channel), time=f.topics_time),
+            t(lang, "news_line", state=flag(f.news_on),
+              channel=self._channel_name(f.topics_channel), time=f.news_time,
+              items=f.news_items),
             t(lang, "consent_line", state=t(lang, "consent_yes" if f.consent else "consent_no")),
             t(lang, "blocked_line", names=self._user_names(f.blocked_users)),
             t(lang, "admins_line", names=self._user_names(f.admins)),
@@ -730,6 +782,35 @@ class SetupView(discord.ui.View):
             )
             button.callback = callback
             self.add_item(button)
+
+    def _add_nav_row(self, row):
+        """``[Page 1] [Page 2] [Page 3] [English]``: jump straight to any page.
+
+        The page you are on is disabled and primary; the form's unsaved edits ride
+        along because every page edits the same ``form`` object.
+        """
+        lang = self.setup_language
+        for page in (1, 2, 3):
+            button = discord.ui.Button(
+                label=t(lang, "btn_page", page=page),
+                style=(
+                    discord.ButtonStyle.primary
+                    if page == self.page
+                    else discord.ButtonStyle.secondary
+                ),
+                row=row,
+                disabled=(page == self.page),
+            )
+            button.callback = self._page_button(page)
+            self.add_item(button)
+        self._add_language_button(row)
+
+    def _page_button(self, page):
+        async def jump(interaction):
+            self.page = page
+            await self._show(interaction)
+
+        return jump
 
     def _add_language_button(self, row):
         button = discord.ui.Button(
@@ -784,12 +865,11 @@ class SetupView(discord.ui.View):
             (
                 ("btn_budget", self._on_budget, False),
                 ("btn_interject", self._on_interject, False),
-                ("btn_more", self._on_more, False),
                 ("btn_save", self._on_save, True),
                 ("btn_cancel", self._on_cancel, False),
             ),
         )
-        self._add_language_button(4)
+        self._add_nav_row(4)
 
     def _page_two(self):
         f = self.form
@@ -831,11 +911,11 @@ class SetupView(discord.ui.View):
                 ("btn_recap", self._on_recap_settings, False),
                 ("btn_topics", self._on_topics_settings, False),
                 ("btn_consent", self._on_consent, False),
-                ("btn_members", self._on_members, False),
-                ("btn_back", self._on_back, False),
+                ("btn_save", self._on_save, True),
+                ("btn_cancel", self._on_cancel, False),
             ),
         )
-        self._add_language_button(4)
+        self._add_nav_row(4)
 
     def _page_three(self):
         f = self.form
@@ -879,11 +959,10 @@ class SetupView(discord.ui.View):
             3,
             (
                 ("btn_save", self._on_save, True),
-                ("btn_back", self._on_members_back, False),
                 ("btn_cancel", self._on_cancel, False),
             ),
         )
-        self._add_language_button(4)
+        self._add_nav_row(4)
 
     async def _show(self, interaction):
         self._build()
@@ -956,22 +1035,6 @@ class SetupView(discord.ui.View):
     async def _on_interject(self, interaction):
         await interaction.response.send_modal(InterjectModal(self))
 
-    async def _on_more(self, interaction):
-        self.page = 2
-        await self._show(interaction)
-
-    async def _on_members(self, interaction):
-        self.page = 3
-        await self._show(interaction)
-
-    async def _on_members_back(self, interaction):
-        self.page = 2
-        await self._show(interaction)
-
-    async def _on_back(self, interaction):
-        self.page = 1
-        await self._show(interaction)
-
     async def _on_recap_settings(self, interaction):
         await interaction.response.send_modal(RecapModal(self))
 
@@ -998,6 +1061,7 @@ class SetupView(discord.ui.View):
                 self.form,
                 is_owner=self.is_owner,
                 owner_id=self.owner_id,
+                lang=lang,
             )
         except g.ConfigError as e:
             await interaction.response.send_message(t(lang, "err_save", error=e), ephemeral=True)
@@ -1166,10 +1230,53 @@ class RecapModal(_ScheduleModal):
 
 
 class TopicsModal(_ScheduleModal):
+    """Topics plus news: the news channel is the topics channel, so one modal edits both.
+
+    That makes five inputs, the most Discord allows in one modal.
+    """
+
     feature = "topics"
 
     def __init__(self, view):
-        super().__init__(view, t(view.setup_language, "modal_topics"))
+        lang = view.setup_language
+        super().__init__(view, t(lang, "modal_topics"))
+        f = view.form
+        self.news_switch = discord.ui.TextInput(
+            label=t(lang, "field_news_switch"),
+            default=t(lang, "on" if f.news_on else "off"),
+            max_length=4,
+        )
+        self.news_time = discord.ui.TextInput(
+            label=t(lang, "field_news_time"), default=f.news_time, max_length=5
+        )
+        self.news_items = discord.ui.TextInput(
+            label=t(lang, "field_news_items"), default=str(f.news_items), max_length=2
+        )
+        self.add_item(self.news_switch)
+        self.add_item(self.news_time)
+        self.add_item(self.news_items)
+
+    async def on_submit(self, interaction):
+        lang = self.view.setup_language
+        f = self.view.form
+        try:
+            on = parse_switch(self.switch.value, lang)
+            time_value = parse_time(self.time.value, lang)
+            news_on = parse_switch(self.news_switch.value, lang)
+            news_time = parse_time(self.news_time.value, lang)
+            news_items = parse_items(self.news_items.value, lang)
+        except ValueError as e:
+            await self._fail(interaction, str(e))
+            return
+        if news_on and f.topics_channel is None:
+            await self._fail(interaction, t(lang, "err_news_channel"))
+            return
+        f.topics_on = on
+        f.topics_time = time_value
+        f.news_on = news_on
+        f.news_time = news_time
+        f.news_items = news_items
+        await self.view._show(interaction)
 
 
 # --------------------------------------------------------------------------- #

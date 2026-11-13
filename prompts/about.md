@@ -10,6 +10,12 @@ docker-compose.yml, egress/).
 Newest first. Same as the "What's new" box on the guide page. When asked what changed or
 what's new, answer from this list.
 
+- **v3.3 · 2026-11-14**
+  - `/setup` pages are easier to move around: every page ends with Page 1 / Page 2 /
+    Page 3 buttons plus the 中文 / English switch, so any page is one click away (the old
+    "More settings", "Members" and "Back" buttons are gone).
+  - Daily news can now be set in `/setup`: the "Topics settings" form also holds the news
+    switch, time and number of stories. News posts in the same channel as the topics.
 - **v3.2 · 2026-11-14**
   - New `news` feature: every day at the server's own time it posts the day's news in a
     channel: one opening line in character, then one short message per story (title, a

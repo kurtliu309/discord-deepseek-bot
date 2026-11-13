@@ -159,17 +159,17 @@ footer { padding-block: 24px 40px; border-top: 1px solid var(--line); color: var
 <div class="wrap">
   <aside class="news" aria-labelledby="news-title">
     <div class="news-head">
-      <span class="tag">v3.2</span>
+      <span class="tag">v3.3</span>
       <h2 id="news-title"><span class="en">What's new</span><span class="zh">版本更新</span></h2>
       <time datetime="2026-11-14">2026-11-14</time>
     </div>
     <ul>
-      <li><span class="en"><b>Daily news</b>: at the server's own time the bot posts the day's news — one opening line in character, then one short message per story: title, a two- or three-sentence summary, one line of comment and the link.</span><span class="zh"><b>每日新闻</b>：按每个群自己设定的时间推送当天的新闻：人设开场一句，然后每条新闻发一条短消息——标题、两三句摘要、一句吐槽和链接。</span></li>
-      <li><span class="en"><b>Picked per server</b>: stories are chosen from that server's own interests, and each server remembers what it was sent for 30 days so nothing repeats.</span><span class="zh"><b>按群挑新闻</b>：按每个群自己的兴趣挑，每个群还各自记住推过的新闻（30 天），不会重样。</span></li>
-      <li><span class="en">The full version of each day's digest is saved on Kurt's computer.</span><span class="zh">每天的完整版会存一份到 Kurt 电脑上。</span></li>
+      <li><span class="en"><b>Easier <code>/setup</code> pages</b>: every page ends with Page 1 / Page 2 / Page 3 buttons and the 中文 / English switch, so any page is one click away.</span><span class="zh"><b><code>/setup</code> 翻页更直接</b>：每页底部都有「第 1 页 / 第 2 页 / 第 3 页」和中英切换，点一下就到。</span></li>
+      <li><span class="en"><b>Daily news in <code>/setup</code></b>: the Topics settings form now also has the news switch, time and number of stories; news posts in the topics channel.</span><span class="zh"><b>新闻也能在 <code>/setup</code> 里设</b>：「话题设置」弹窗里加了新闻开关、时间和条数，新闻跟话题发在同一个频道。</span></li>
     </ul>
     <details>
       <summary><span class="en">Earlier versions</span><span class="zh">更早的版本</span></summary>
+      <p><b>v3.2 · 2026-11-14</b> — <span class="en">Daily news: an opening line in character, then one short message per story (title, short summary, one line of comment, link), picked from each server's own interests and never repeated within 30 days.</span><span class="zh">每日新闻：人设开场一句，然后每条新闻一条短消息（标题、简短摘要、一句吐槽、链接），按每个群自己的兴趣挑，30 天内不重样。</span></p>
       <p><b>v3.1 · 2026-11-14</b> — <span class="en">Owner-trust servers can switch on <b>tools</b>: the model may search the web, read a page and read a video's public subtitles. Public servers never get tools. Each call costs a lookup; one question is capped at 4 calls and about 40,000 characters. The tools and a SearXNG search server run in key-less containers behind the proxy. Search quality is still mediocre for now.</span><span class="zh">owner 信任等级的群可以打开 <b>tools</b>：模型能自己搜网页、读网页、读视频的公开字幕。public 群永远没有工具。每次调用扣查询额度；一次提问最多 4 次调用、合计约 4 万字。工具和一个 SearXNG 搜索服务跑在无密钥的容器里、只经代理出网。搜索质量目前一般。</span></p>
       <p><b>v3.0 · 2026-11-14</b> — <span class="en">One config and one memory per server; <code>/setup</code> with a 中文 / English switch; two-layer budgets (server + person, replies and lookups) with owner DMs when they run out and <code>/feed @someone</code>; blocked people and per-server admins; a change list DMed to the owner on every save; a hot-reloaded persona library; the scheduler running per server.</span><span class="zh">每个群一份配置和一份记忆；<code>/setup</code> 支持中英切换；两层额度（群 + 每人，回复和查询各一套），用完私信 owner，<code>/feed @某人</code> 只补这个人；用户黑名单和按群管理员；每次保存有变化就私信 owner 只列改动；人设库热加载；定时任务按群跑。</span></p>
       <p><b>v2.2 · 2026-11-13</b> — <span class="en">Senior film VFX backstory; Houdini/FX messages get a 5% jump-in chance; the nightly recap no longer @mentions anyone.</span><span class="zh">补充影视特效 senior 身世；Houdini/FX 话题插话概率升到 5%；每晚总结不再 @ 人。</span></p>

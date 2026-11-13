@@ -633,15 +633,20 @@ class TestSetupLayout(unittest.IsolatedAsyncioTestCase):
             await admin_view._on_blocked(interaction)
             self.assertEqual(admin_view.form.blocked_users, [9, 10])
 
-    async def test_member_page_navigation(self):
+    async def test_page_buttons_jump_straight_to_a_page(self):
         with tempfile.TemporaryDirectory() as tmp:
             owner_view, _ = self._views(tmp)
             interaction = SimpleNamespace(response=SimpleNamespace(edit_message=self._edit()))
-            await owner_view._on_more(interaction)
-            self.assertEqual(owner_view.page, 2)
-            await owner_view._on_members(interaction)
+            buttons = {
+                getattr(i, "label", None): i
+                for i in owner_view.children
+                if isinstance(i, discord.ui.Button)
+            }
+            await buttons["第 3 页"].callback(interaction)
             self.assertEqual(owner_view.page, 3)
-            await owner_view._on_members_back(interaction)
+            await buttons["第 1 页"].callback(interaction)
+            self.assertEqual(owner_view.page, 1)
+            await buttons["第 2 页"].callback(interaction)
             self.assertEqual(owner_view.page, 2)
 
     @staticmethod
@@ -709,7 +714,7 @@ class TestStringTables(unittest.TestCase):
             "owner_only_line",
             "select_blocked",
             "select_admins",
-            "btn_members",
+            "btn_page",
             "dm_changed_header",
             "unknown_user",
         ):
