@@ -249,6 +249,8 @@ class GuildConfig(BaseModel):
     persona: str = "tiredfx"  # data/shared/personas/<persona>/
     style: str = "normal"  # data/shared/personas/_styles/<style>.md
     language: str = "en"
+    # /setup UI language only; the bot's replies follow `language`.
+    setup_language: Literal["zh", "en"] = "zh"
     extra_prompt: str = ""
     budget: BudgetSettings = Field(default_factory=BudgetSettings)
     allowed_channels: Optional[list[ChannelId]] = None  # None = every channel
