@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DeepSeek Doomer Bot</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<style>
+/* Layout: one narrow reading column; a sticky bar holds the tab switch and the language switch. */
+:root {
+  --bg: #eceef2;
+  --surface: #f8f9fb;
+  --ink: #1c2230;
+  --muted: #5d6474;
+  --line: #d3d7e0;
+  --accent: #6b4f86;      /* dusk plum: the "it's over" hour */
+  --accent-soft: #e6dff0;
+  --ok: #2f7a5b;
+  --no: #a2463d;
+  --code-bg: #e3e6ed;
+  --display: "Space Grotesk", "Noto Sans SC", system-ui, sans-serif;
+  --body: "Inter", "Noto Sans SC", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171e; --surface: #1c2029; --ink: #e4e7ee; --muted: #9aa1b2; --line: #2e3442;
+    --accent: #b49ad0; --accent-soft: #2c2538; --ok: #6cc29b; --no: #e0857a; --code-bg: #232835;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171e; --surface: #1c2029; --ink: #e4e7ee; --muted: #9aa1b2; --line: #2e3442;
+  --accent: #b49ad0; --accent-soft: #2c2538; --ok: #6cc29b; --no: #e0857a; --code-bg: #232835;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; } img { max-width: 100%; } [hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--ink); font: 400 15px/1.65 var(--body);
+  -webkit-font-smoothing: antialiased;
+}
+/* bilingual: every bit of copy exists twice; the root's data-lang decides which shows */
+:root[data-lang="en"] .zh, :root[data-lang="zh"] .en { display: none !important; }
+
+body::before {
+  content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px);
+  z-index: 10; background: var(--bg);
+}
+.bar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(8px); border-bottom: 1px solid var(--line);
+}
+.wrap {
+  max-width: 760px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.bar .wrap { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding-block: 10px; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: var(--surface); }
+.seg button {
+  font: 500 13px/1 var(--body); color: var(--muted); background: none; border: 0;
+  padding: 8px 14px; border-radius: 999px; cursor: pointer;
+}
+.seg button[aria-selected="true"], .seg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+.seg button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header.hero { padding-block: 40px 8px; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1 { font: 700 clamp(30px, 6vw, 44px)/1.1 var(--display); margin: 10px 0 12px; text-wrap: balance; letter-spacing: -.01em; }
+.lede { color: var(--muted); max-width: 62ch; margin: 0; font-size: 16px; }
+.quote { margin: 18px 0 0; font: 400 14px/1.5 var(--mono); color: var(--muted); }
+.quote b { color: var(--ink); font-weight: 500; }
+
+main { padding-block: 16px 64px; }
+section { padding-block: 22px; border-top: 1px solid var(--line); }
+section:first-child { border-top: 0; }
+h2 { font: 700 21px/1.25 var(--display); margin: 0 0 10px; text-wrap: balance; }
+h3 { font: 600 15px/1.3 var(--body); margin: 18px 0 6px; }
+p { margin: 0 0 10px; max-width: 66ch; }
+ul { margin: 0 0 10px; padding-left: 20px; max-width: 66ch; }
+li { margin: 4px 0; }
+code, .mono { font-family: var(--mono); font-size: .88em; }
+code { background: var(--code-bg); padding: 1px 6px; border-radius: 4px; }
+a { color: var(--accent); text-underline-offset: 3px; }
+
+/* the few "key numbers" of the bot, one row */
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 14px 0 6px; }
+.fact { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+.fact .n { font: 700 24px/1.1 var(--display); font-variant-numeric: tabular-nums; }
+.fact .l { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+.table-scroll { overflow-x: auto; margin: 8px 0 12px; }
+table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 14px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 12px/1.3 var(--body); text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+td.y { color: var(--ok); font-weight: 600; white-space: nowrap; }
+td.x { color: var(--no); font-weight: 600; white-space: nowrap; }
+
+.cmds { display: grid; gap: 8px; margin: 10px 0; }
+.cmd { display: grid; grid-template-columns: minmax(90px, auto) 1fr; gap: 12px; align-items: baseline; }
+.cmd code { white-space: nowrap; font-weight: 500; }
+
+.source {
+  background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: 12px; padding: 18px; margin-top: 8px;
+}
+.source h2 { margin-bottom: 6px; }
+.repo { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+.repo a.big { font: 600 16px/1.3 var(--mono); word-break: break-all; }
+.pill { font: 500 12px/1 var(--body); border: 1px solid var(--line); background: var(--surface); padding: 6px 10px; border-radius: 999px; color: var(--muted); }
+pre { background: var(--code-bg); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font: 400 13px/1.55 var(--mono); margin: 8px 0 0; }
+.copy { font: 500 12px/1 var(--body); border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 7px 10px; border-radius: 6px; cursor: pointer; }
+
+.diagram { overflow-x: auto; margin: 10px 0 4px; }
+.diagram svg { display: block; min-width: 620px; width: 100%; height: auto; }
+.diagram text { font-family: var(--body); }
+
+ol.flow { padding-left: 20px; max-width: 66ch; }
+ol.flow li { margin: 5px 0; }
+.note { font-size: 13px; color: var(--muted); }
+footer { padding-block: 24px 40px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+@media (prefers-reduced-motion: no-preference) { .panel { animation: in .18s ease-out; } }
+@keyframes in { from { opacity: .4; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="wrap">
+    <div class="seg" role="tablist" aria-label="Section">
+      <button id="tab-rules" role="tab" aria-selected="true" aria-controls="rules"><span class="en">Rules</span><span class="zh">规则</span></button>
+      <button id="tab-tech" role="tab" aria-selected="false" aria-controls="tech"><span class="en">Tech &amp; architecture</span><span class="zh">技术与架构</span></button>
+    </div>
+    <div class="seg" aria-label="Language">
+      <button id="lang-en" aria-pressed="true">English</button>
+      <button id="lang-zh" aria-pressed="false">中文</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">deepseekbot · discord</div>
+    <h1><span class="en">The resident doomer</span><span class="zh">群里的厌世老哥</span></h1>
+    <p class="lede">
+      <span class="en">A DeepSeek-powered chat bot that lives in our server. It's tired, pessimistic and short-spoken, jumps into chats now and then, reads files and links you give it, and writes a recap every night.</span>
+      <span class="zh">一个由 DeepSeek 驱动、住在我们服务器里的聊天 bot。它很丧、很悲观、话很少，偶尔自己插话，能读你给它的文件和链接，每晚写一篇总结。</span>
+    </p>
+    <p class="quote">&gt; <b>you:</b> @deepseekbot how's your day<br>&gt; <b>bot:</b> <span class="en">started bad, peaked at bad. thanks for asking i guess</span><span class="zh">开局很烂，巅峰也很烂。谢谢关心吧</span></p>
+  </header>
+
+  <main>
+    <!-- ========================= RULES ========================= -->
+    <div id="rules" class="panel" role="tabpanel" aria-labelledby="tab-rules">
+      <section>
+        <h2><span class="en">Talking to it</span><span class="zh">怎么跟它说话</span></h2>
+        <ul>
+          <li><span class="en"><b>Mention it</b>: type <code>@deepseekbot</code> and pick the entry with the BOT tag. There's a role with the same name; mentioning the role does nothing.</span><span class="zh"><b>@ 它</b>：输入 <code>@deepseekbot</code>，选带 BOT 标记的那一项。有一个同名的身份组，@ 身份组它不会理。</span></li>
+          <li><span class="en"><b>Reply</b> to one of its messages and it answers, no mention needed.</span><span class="zh"><b>回复</b>它的任意一条消息，它也会接话，不用 @。</span></li>
+          <li><span class="en">It works in every channel it can see <b>except #general</b>, where it stays completely silent.</span><span class="zh">它在所有能看到的频道里都能用，<b>除了 #general</b>：在那里它完全不出声。</span></li>
+          <li><span class="en"><b>DMs</b>: it only answers Kurt. Other DMs are ignored.</span><span class="zh"><b>私信</b>：只回 Kurt，其他人的私信一律不回。</span></li>
+          <li><span class="en">It sees the last 12 messages around yours (the reply chain first), so it knows what you're talking about.</span><span class="zh">它会看你这条消息前后最近 12 条（回复链优先），所以知道你们在聊什么。</span></li>
+        </ul>
+      </section>
+
+      <section>
+        <h2><span class="en">When it jumps in on its own</span><span class="zh">它什么时候自己插话</span></h2>
+        <div class="facts">
+          <div class="fact"><div class="n">3%</div><div class="l"><span class="en">chance on any message</span><span class="zh">每条消息的随机概率</span></div></div>
+          <div class="fact"><div class="n">12 / 3 min</div><div class="l"><span class="en">more than 12 messages in 3 minutes</span><span class="zh">3 分钟内超过 12 条</span></div></div>
+          <div class="fact"><div class="n">10 min</div><div class="l"><span class="en">cooldown per channel afterwards</span><span class="zh">之后该频道冷却</span></div></div>
+        </div>
+        <p><span class="en">It replies to the one message it most wants to answer, without pinging that person. It may @ someone only when it really matters. It can also decide to stay quiet.</span><span class="zh">它会挑一条最想回的消息，以“回复”的形式接上，不给对方发提醒；只有确实必要时才会 @ 人。它也可能决定不说话。</span></p>
+      </section>
+
+      <section>
+        <h2><span class="en">Daily reply budget</span><span class="zh">每日回复余额</span></h2>
+        <ul>
+          <li><span class="en"><b>50 replies a day</b>, shared by everyone: mention replies, jump-ins and file/link replies all count.</span><span class="zh"><b>每天 50 条</b>，所有人共用：@ 回复、主动插话、读文件和链接的回复都算。</span></li>
+          <li><span class="en">Refills every morning at <b>09:00 Adelaide time</b>.</span><span class="zh">每天早上 <b>09:00（阿德莱德时间）</b>恢复满。</span></li>
+          <li><span class="en">When it runs dry, the next person who mentions it gets one "out of juice" message, then silence until the refill.</span><span class="zh">用完后，下一个 @ 它的人会收到一句“没电了”，之后它就安静到恢复为止。</span></li>
+          <li><span class="en">Kurt's messages and <code>/rule</code> don't use the budget. Kurt can refill it early with <code>/feed</code>.</span><span class="zh">Kurt 的消息和 <code>/rule</code> 不扣余额。Kurt 可以用 <code>/feed</code> 提前补满。</span></li>
+        </ul>
+      </section>
+
+      <section>
+        <h2><span class="en">Commands</span><span class="zh">命令</span></h2>
+        <div class="cmds">
+          <div class="cmd"><code>/rule</code><span><span class="en">Shows a short card of how it works and how much budget is left. Only you see it.</span><span class="zh">显示一张简短的规则卡和剩余余额，只有你自己看得到。</span></span></div>
+          <div class="cmd"><code>/rule &lt;question&gt;</code><span><span class="en">Ask how it works, e.g. <code>/rule why did you jump in?</code> It drops the persona and answers plainly.</span><span class="zh">问它的机制，比如 <code>/rule why did you jump in?</code>，它会放下人设正常回答。</span></span></div>
+          <div class="cmd"><code>/feed</code><span><span class="en">Kurt only: refills the daily budget.</span><span class="zh">仅限 Kurt：补满当天余额。</span></span></div>
+        </div>
+      </section>
+
+      <section>
+        <h2><span class="en">Files, links and docs</span><span class="zh">文件、链接和文档</span></h2>
+        <p><span class="en">Attach a file or paste a link in the message where you mention it.</span><span class="zh">在 @ 它的那条消息里附上文件或贴上链接就行。</span></p>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th><span class="en">Type</span><span class="zh">类型</span></th><th><span class="en">Examples</span><span class="zh">例子</span></th><th></th></tr></thead>
+            <tbody>
+              <tr><td><span class="en">Text &amp; data</span><span class="zh">文本和数据</span></td><td class="mono">txt md csv json yaml log</td><td class="y">✓</td></tr>
+              <tr><td><span class="en">Code</span><span class="zh">代码</span></td><td class="mono">py vex vfl js ts cpp h sh glsl usda</td><td class="y">✓</td></tr>
+              <tr><td><span class="en">Office &amp; PDF</span><span class="zh">办公文档和 PDF</span></td><td class="mono">pdf docx xlsx pptx</td><td class="y">✓</td></tr>
+              <tr><td><span class="en">Web links</span><span class="zh">网页链接</span></td><td><span class="en">any public https page; GitHub file links are read as raw files</span><span class="zh">任何公开的 https 网页；GitHub 文件链接会读原始文件</span></td><td class="y">✓</td></tr>
+              <tr><td><span class="en">Houdini binaries, images, archives, audio/video</span><span class="zh">Houdini 二进制、图片、压缩包、音视频</span></td><td class="mono">hip hda bgeo png jpg zip mp4</td><td class="x">✗</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <ul>
+          <li><span class="en">Up to <b>10 MB</b> per file and <b>3 files</b> per message. Very long files are cut off, and it tells you so.</span><span class="zh">单个文件最大 <b>10 MB</b>，一条消息最多 <b>3 个</b>。特别长的文件会被截断，它会告诉你。</span></li>
+          <li><span class="en">Ask explicitly for a document ("write this up as an md doc") and it replies with a <code>.md</code> file, up to about 5,000 words.</span><span class="zh">明确要文档（比如“写成 md 文档”），它会回一个 <code>.md</code> 文件，最长约 5000 个英文单词。</span></li>
+          <li><span class="en">It can't touch anyone's computer. It only reads what you send in Discord.</span><span class="zh">它碰不到任何人的电脑，只读你在 Discord 里发给它的东西。</span></li>
+        </ul>
+      </section>
+
+      <section>
+        <h2><span class="en">Every day</span><span class="zh">每天的固定节目</span></h2>
+        <h3><span class="en">22:00 · nightly recap</span><span class="zh">22:00 · 每晚总结</span></h3>
+        <p><span class="en">It reads the last 24 hours of human messages in every channel it can see and posts up to 5 bullet points, in English and in character. It may @ people who featured.</span><span class="zh">读它能看到的所有频道最近 24 小时里真人的消息，用英语、按人设口吻发最多 5 条要点，可能会 @ 当天出场的人。</span></p>
+        <h3><span class="en">09:00 · morning topics</span><span class="zh">09:00 · 早上话题</span></h3>
+        <p><span class="en">Three conversation starters (at least two of them weird) picked from news, tech, CG, AI, Australian news, GitHub trending and a few subreddits, plus one gloomy life thought. Links don't unfold into big previews.</span><span class="zh">从新闻、科技、CG、AI、澳洲本地新闻、GitHub 热门和几个 Reddit 版块里挑 3 个话题（至少 2 个怪话题），再加 1 句丧气的人生感悟。链接不会展开大预览。</span></p>
+        <p class="note"><span class="en">If Kurt's computer is off at those times, that day is simply skipped.</span><span class="zh">如果那时 Kurt 的电脑没开，当天就跳过。</span></p>
+      </section>
+
+      <section>
+        <h2><span class="en">Privacy</span><span class="zh">隐私</span></h2>
+        <ul>
+          <li><span class="en">Messages it reads (yours, the recap's, file and link contents) are sent to the <b>DeepSeek API</b> to generate replies.</span><span class="zh">它读到的内容（你的消息、总结用到的聊天、文件和链接的内容）会发给 <b>DeepSeek API</b> 来生成回复。</span></li>
+          <li><span class="en">On Kurt's computer it keeps only a short group profile (interests, running jokes) and the last 10 recaps. Raw chat is never saved.</span><span class="zh">Kurt 电脑上只存一份简短的群档案（兴趣、常驻梗）和最近 10 篇总结，聊天原文从不保存。</span></li>
+          <li><span class="en">Don't want a channel read? Remove the bot's permission to view it.</span><span class="zh">不想某个频道被读？去掉 bot 查看那个频道的权限就行。</span></li>
+          <li><span class="en">Don't paste passwords or keys anywhere it can see.</span><span class="zh">别在它看得到的地方贴密码或密钥。</span></li>
+        </ul>
+      </section>
+
+      <section>
+        <h2><span class="en">The one floor</span><span class="zh">唯一的底线</span></h2>
+        <p><span class="en">Swearing and roasting are fine. It won't do slurs or hate against groups, doxxing or real threats. If someone seems genuinely in a bad place, it drops the bit and acts like a decent friend.</span><span class="zh">骂人和互怼都可以。它不会说针对群体的仇恨言论，不会人肉，不会真的威胁人。如果有人看起来真的状态很差，它会放下人设，像个正常朋友一样关心对方。</span></p>
+      </section>
+    </div>
+
+    <!-- ========================= TECH ========================= -->
+    <div id="tech" class="panel" role="tabpanel" aria-labelledby="tab-tech" hidden>
+      <section>
+        <div class="source">
+          <div class="eyebrow"><span class="en">Open source</span><span class="zh">开源</span></div>
+          <h2><span class="en">Source code</span><span class="zh">源码</span></h2>
+          <div class="repo">
+            <a class="big" href="https://github.com/kurtliu309/discord-deepseek-bot" target="_blank" rel="noopener">github.com/kurtliu309/discord-deepseek-bot</a>
+            <span class="pill">MIT License</span>
+            <span class="pill">branch: main</span>
+          </div>
+          <p><span class="en">Everything that runs is in the repo: the bot, the daily jobs, the fetcher, the proxy config and the Docker setup. Secrets live only in a local <code>.env</code> that is never committed; copy <code>.env.example</code> to start.</span><span class="zh">跑着的所有东西都在仓库里：bot、每日任务、抓取器、代理配置和 Docker 部署。密钥只放在本地的 <code>.env</code> 里，从不提交；从复制 <code>.env.example</code> 开始。</span></p>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">
+            <button class="copy" id="copy-clone" type="button"><span class="en">Copy clone command</span><span class="zh">复制 clone 命令</span></button>
+            <span class="note" id="copy-status" aria-live="polite"></span>
+          </div>
+          <pre id="clone-cmd">git clone https://github.com/kurtliu309/discord-deepseek-bot.git
+cd discord-deepseek-bot
+cp .env.example .env    # fill in your own tokens
+docker compose up -d --build</pre>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th><span class="en">File</span><span class="zh">文件</span></th><th><span class="en">What it is</span><span class="zh">是什么</span></th></tr></thead>
+              <tbody>
+                <tr><td class="mono">bot.py</td><td><span class="en">Discord bot: replies, jump-ins, budget, /rule, /feed, files and docs</span><span class="zh">Discord bot：回复、插话、余额、/rule、/feed、文件和文档</span></td></tr>
+                <tr><td class="mono">scheduler.py</td><td><span class="en">Nightly recap, morning topics, group profile</span><span class="zh">每晚总结、早上话题、群档案</span></td></tr>
+                <tr><td class="mono">fetcher.py</td><td><span class="en">Key-less fetcher: web pages, RSS, file parsing</span><span class="zh">无密钥抓取器：网页、RSS、文件解析</span></td></tr>
+                <tr><td class="mono">egress/</td><td><span class="en">Squid proxy: per-container allow rules</span><span class="zh">Squid 代理：按容器区分的放行规则</span></td></tr>
+                <tr><td class="mono">docker-compose.yml</td><td><span class="en">Four containers, two networks, all hardening</span><span class="zh">四个容器、两张网络和全部加固设置</span></td></tr>
+                <tr><td class="mono">prompts/default.txt</td><td><span class="en">The persona</span><span class="zh">人设</span></td></tr>
+                <tr><td class="mono">tests/</td><td><span class="en">Unit tests for budget, triggers and parsing</span><span class="zh">余额、触发和解析的单元测试</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2><span class="en">Stack</span><span class="zh">技术栈</span></h2>
+        <div class="table-scroll">
+          <table>
+            <tbody>
+              <tr><th><span class="en">Runtime</span><span class="zh">运行环境</span></th><td><span class="en">Docker Desktop (WSL 2) on a Windows PC that stays on</span><span class="zh">一台常开的 Windows 电脑上的 Docker Desktop（WSL 2）</span></td></tr>
+              <tr><th><span class="en">Language</span><span class="zh">语言</span></th><td>Python 3.13, <code>python:3.13-slim</code></td></tr>
+              <tr><th>Discord</th><td><code>discord.py</code> 2.7 <span class="en">(gateway + slash commands)</span><span class="zh">（gateway 长连接 + 斜杠命令）</span></td></tr>
+              <tr><th><span class="en">Model</span><span class="zh">模型</span></th><td><span class="en">DeepSeek <code>deepseek-flash</code> through the OpenAI-compatible API (<code>openai</code> SDK). Plain chat completions, <b>no tools or function calling</b>.</span><span class="zh">DeepSeek <code>deepseek-flash</code>，经 OpenAI 兼容接口（<code>openai</code> SDK）调用。只用普通对话补全，<b>不给模型任何工具或函数调用</b>。</span></td></tr>
+              <tr><th><span class="en">Fetching</span><span class="zh">抓取</span></th><td><code>httpx</code>, <code>feedparser</code>, <code>pypdf</code>, <code>python-docx</code>, <code>openpyxl</code>, <code>python-pptx</code></td></tr>
+              <tr><th><span class="en">Network</span><span class="zh">网络</span></th><td><span class="en">Squid allowlist proxy; internal Docker network with no gateway</span><span class="zh">Squid 白名单代理；没有网关的 Docker 内部网络</span></td></tr>
+              <tr><th><span class="en">Operations</span><span class="zh">运维</span></th><td><span class="en">Claude Code on the host runs <code>docker compose</code>; Kurt steers it from his phone</span><span class="zh">主机上的 Claude Code 跑 <code>docker compose</code>，Kurt 用手机遥控它</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2><span class="en">Architecture</span><span class="zh">架构</span></h2>
+        <p><span class="en">Four containers from one image (plus the proxy). The two that hold secrets can only talk to Discord and DeepSeek. The one that browses the web holds no secrets.</span><span class="zh">四个容器，三个程序共用一个镜像，另加一个代理。拿着密钥的两个只能连 Discord 和 DeepSeek；能上网的那个手里没有任何密钥。</span></p>
+        <div class="diagram" role="img" aria-label="Architecture: bot and scheduler reach Discord and DeepSeek only through the egress proxy; the key-less fetcher reaches the public web through the same proxy; only the scheduler mounts the local data folder.">
+          <svg viewBox="0 0 720 330" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+            </defs>
+            <rect x="10" y="10" width="470" height="300" rx="12" fill="var(--surface)" stroke="var(--line)"/>
+            <text x="24" y="34" font-size="12" fill="var(--muted)">Docker Desktop · botnet (internal, no gateway)</text>
+
+            <rect x="30" y="52" width="150" height="58" rx="8" fill="var(--bg)" stroke="var(--accent)"/>
+            <text x="44" y="76" font-size="14" font-weight="600" fill="var(--ink)">bot</text>
+            <text x="44" y="96" font-size="11" fill="var(--muted)">token + API key</text>
+
+            <rect x="30" y="128" width="150" height="58" rx="8" fill="var(--bg)" stroke="var(--accent)"/>
+            <text x="44" y="152" font-size="14" font-weight="600" fill="var(--ink)">scheduler</text>
+            <text x="44" y="172" font-size="11" fill="var(--muted)">token + API key</text>
+
+            <rect x="30" y="204" width="150" height="58" rx="8" fill="var(--bg)" stroke="var(--ok)"/>
+            <text x="44" y="228" font-size="14" font-weight="600" fill="var(--ink)">fetcher</text>
+            <text x="44" y="248" font-size="11" fill="var(--muted)">no secrets</text>
+
+            <rect x="300" y="110" width="150" height="90" rx="8" fill="var(--bg)" stroke="var(--line)"/>
+            <text x="314" y="140" font-size="14" font-weight="600" fill="var(--ink)">egress</text>
+            <text x="314" y="160" font-size="11" fill="var(--muted)">Squid · HTTPS only</text>
+            <text x="314" y="178" font-size="11" fill="var(--muted)">private IPs blocked</text>
+
+            <line x1="180" y1="81" x2="298" y2="132" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+            <line x1="180" y1="157" x2="298" y2="157" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+            <line x1="180" y1="233" x2="298" y2="182" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+            <line x1="105" y1="110" x2="105" y2="202" stroke="var(--muted)" stroke-width="1" stroke-dasharray="4 4"/>
+            <text x="112" y="196" font-size="10" fill="var(--muted)">files / urls</text>
+
+            <rect x="30" y="274" width="150" height="26" rx="6" fill="var(--accent-soft)" stroke="var(--line)"/>
+            <text x="42" y="291" font-size="11" fill="var(--ink)">./data → scheduler only</text>
+
+            <rect x="530" y="40" width="175" height="70" rx="8" fill="var(--surface)" stroke="var(--accent)"/>
+            <text x="544" y="66" font-size="13" font-weight="600" fill="var(--ink)">Discord</text>
+            <text x="544" y="86" font-size="13" font-weight="600" fill="var(--ink)">api.deepseek.com</text>
+            <text x="544" y="102" font-size="10" fill="var(--muted)">bot + scheduler only</text>
+
+            <rect x="530" y="200" width="175" height="70" rx="8" fill="var(--surface)" stroke="var(--ok)"/>
+            <text x="544" y="228" font-size="13" font-weight="600" fill="var(--ink)">Public web</text>
+            <text x="544" y="248" font-size="10" fill="var(--muted)">RSS, pages, GitHub</text>
+            <text x="544" y="262" font-size="10" fill="var(--muted)">fetcher only</text>
+
+            <line x1="450" y1="135" x2="528" y2="80" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#arr)"/>
+            <line x1="450" y1="180" x2="528" y2="232" stroke="var(--ok)" stroke-width="1.5" marker-end="url(#arr)"/>
+          </svg>
+        </div>
+        <p class="note"><span class="en">Control flows one way: Kurt's phone → Claude Code on the PC → <code>docker compose</code> → containers. Nothing inside a container can reach back to the PC, the LAN or Claude.</span><span class="zh">控制方向是单向的：Kurt 的手机 → 电脑上的 Claude Code → <code>docker compose</code> → 容器。容器里的东西碰不到电脑、局域网或 Claude。</span></p>
+      </section>
+
+      <section>
+        <h2><span class="en">Isolation</span><span class="zh">隔离</span></h2>
+        <ul>
+          <li><span class="en">Every container: read-only filesystem, non-root user, all Linux capabilities dropped, <code>no-new-privileges</code>, memory/CPU/process limits, no published ports, no Docker socket.</span><span class="zh">每个容器：只读文件系统、非 root 用户、去掉全部 Linux capabilities、<code>no-new-privileges</code>、内存/CPU/进程数上限、不对外开端口、不挂 Docker socket。</span></li>
+          <li><span class="en">The containers sit on an internal network with no route out and no host-side gateway. The only way out is the Squid proxy.</span><span class="zh">容器在一张没有出网路由、也没有主机侧网关的内部网络上，唯一的出口是 Squid 代理。</span></li>
+          <li><span class="en">Squid tells containers apart by fixed address: <b>bot</b> and <b>scheduler</b> may reach Discord and <code>api.deepseek.com</code> only; the <b>fetcher</b> may reach any public site. Private, loopback and link-local addresses are refused after DNS for everyone, so nothing can reach the PC or the home network.</span><span class="zh">Squid 按固定地址区分容器：<b>bot</b> 和 <b>scheduler</b> 只能连 Discord 和 <code>api.deepseek.com</code>；<b>fetcher</b> 能连任何公网网站。私网、回环和链路本地地址在 DNS 解析后一律拒绝，所以谁都碰不到电脑或家里的网络。</span></li>
+          <li><span class="en">All file parsing happens in the fetcher, which has no secrets and refuses to start if one is passed in. A malicious PDF can't get at the tokens.</span><span class="zh">所有文件解析都在 fetcher 里做；它没有任何密钥，如果被传入密钥会拒绝启动。恶意 PDF 拿不到 token。</span></li>
+          <li><span class="en">The only mount in the whole stack is a <code>data</code> folder for the scheduler.</span><span class="zh">整套系统唯一的挂载，是给 scheduler 用的 <code>data</code> 文件夹。</span></li>
+          <li><span class="en">The model has no tools. Chat, files, pages and headlines are fetched by code and handed to it as untrusted data, so a prompt injection can at worst make it say something dumb.</span><span class="zh">模型没有工具。聊天、文件、网页和新闻标题都由代码取来，作为不可信数据交给它，所以提示词注入最坏也只能让它说句蠢话。</span></li>
+        </ul>
+      </section>
+
+      <section>
+        <h2><span class="en">Flows</span><span class="zh">流程</span></h2>
+        <h3><span class="en">Mention reply</span><span class="zh">@ 回复</span></h3>
+        <ol class="flow">
+          <li><span class="en">Gateway event → skip bots, blocked channels and non-owner DMs.</span><span class="zh">收到 gateway 事件 → 跳过 bot、屏蔽频道和非 Kurt 的私信。</span></li>
+          <li><span class="en">Spend one unit of budget (unless it's Kurt).</span><span class="zh">扣 1 条余额（Kurt 不扣）。</span></li>
+          <li><span class="en">Attachments and links go to the fetcher, which returns plain text.</span><span class="zh">附件和链接交给 fetcher，拿回纯文本。</span></li>
+          <li><span class="en">Build context: reply chain first, then recent channel history, 12 messages max.</span><span class="zh">组装上下文：回复链优先，再补频道最近的消息，最多 12 条。</span></li>
+          <li><span class="en">One chat completion with the persona. A <code>&lt;&lt;&lt;FILE name.md&gt;&gt;&gt;</code> block in the answer becomes an attachment.</span><span class="zh">带人设调用一次对话补全。回答里如果有 <code>&lt;&lt;&lt;FILE name.md&gt;&gt;&gt;</code> 块，就变成附件发出。</span></li>
+          <li><span class="en">If the model call fails or it answers nothing, the budget unit is refunded.</span><span class="zh">模型调用失败或没有回答时，余额退回。</span></li>
+        </ol>
+        <h3><span class="en">Jump-in</span><span class="zh">主动插话</span></h3>
+        <ol class="flow">
+          <li><span class="en">Each human message updates a per-channel window; a 3% roll or more than 12 messages in 3 minutes triggers, unless the channel is cooling down.</span><span class="zh">每条真人消息更新该频道的时间窗口；3% 随机命中，或 3 分钟内超过 12 条就触发，冷却期间除外。</span></li>
+          <li><span class="en">The model sees the last 12 messages numbered and answers <code>REPLY_TO: n</code> plus its message, or <code>SKIP</code> (refunded).</span><span class="zh">模型看到编号的最近 12 条消息，回答 <code>REPLY_TO: n</code> 加上它的话，或者回答 <code>SKIP</code>（退回余额）。</span></li>
+          <li><span class="en">Sent as a Discord reply to message n with the reply ping switched off; the channel cools down for 10 minutes.</span><span class="zh">以 Discord 回复的形式接在第 n 条下面，关掉回复提醒；该频道冷却 10 分钟。</span></li>
+        </ol>
+        <h3><span class="en">Nightly recap (22:00)</span><span class="zh">每晚总结（22:00）</span></h3>
+        <ol class="flow">
+          <li><span class="en">Read 24 h of human messages from every visible channel over the REST API.</span><span class="zh">通过 REST API 读所有可见频道 24 小时内的真人消息。</span></li>
+          <li><span class="en">If it's longer than ~60k characters, compress it chunk by chunk first.</span><span class="zh">超过约 6 万字就先分段压缩。</span></li>
+          <li><span class="en">Write the recap using the last 3 recaps and the group profile as context; post it; save it (kept 10 days).</span><span class="zh">参照最近 3 篇总结和群档案写总结；发出去；存到本地（保留 10 天）。</span></li>
+          <li><span class="en">Rewrite the group profile with today merged in; topics nobody mentions fade out. Kurt's hand-written section at the top is never touched.</span><span class="zh">把今天的内容并进群档案重写一遍，没人再提的话题慢慢淡出。顶部 Kurt 手写的部分从不改动。</span></li>
+        </ol>
+        <h3><span class="en">Morning topics (08:00 → 09:00)</span><span class="zh">早上话题（08:00 → 09:00）</span></h3>
+        <ol class="flow">
+          <li><span class="en">08:00: the fetcher pulls ~12 RSS feeds and two combined Reddit RSS feeds; results are cached locally.</span><span class="zh">08:00：fetcher 抓约 12 个 RSS 源和 2 个合并的 Reddit RSS，结果缓存在本地。</span></li>
+          <li><span class="en">08:30: retry only the feeds that came back empty, politely spaced.</span><span class="zh">08:30：只补抓空掉的源，请求之间留出间隔。</span></li>
+          <li><span class="en">09:00: the model weighs the headlines against the group profile and picks 3 topics (≥2 weird) plus a life thought. The cache is deleted after posting.</span><span class="zh">09:00：模型对照群档案权衡这些标题，挑 3 个话题（至少 2 个怪话题）加一句人生感悟。发完后删除缓存。</span></li>
+        </ol>
+      </section>
+
+      <section>
+        <h2><span class="en">Costs</span><span class="zh">花费</span></h2>
+        <p><span class="en">A full day of replies plus the recap is a few cents of DeepSeek tokens. The account holds a small prepaid balance, so spending stops when it runs out. Containers use roughly 50–70 MB of memory each.</span><span class="zh">一整天的回复加上总结，DeepSeek 的 token 费用只有几美分。账户里只充了少量余额，用完就停，不会超支。每个容器大约占 50–70 MB 内存。</span></p>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <span class="en">Built by Kurt with Claude Code and DeepSeek. MIT licensed.</span>
+    <span class="zh">由 Kurt 用 Claude Code 和 DeepSeek 搭建，MIT 许可证开源。</span>
+    · <a href="https://github.com/kurtliu309/discord-deepseek-bot" target="_blank" rel="noopener">GitHub</a>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function read(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+
+  function setLang(lang) {
+    root.setAttribute("data-lang", lang);
+    root.setAttribute("lang", lang === "zh" ? "zh-CN" : "en");
+    document.getElementById("lang-en").setAttribute("aria-pressed", String(lang === "en"));
+    document.getElementById("lang-zh").setAttribute("aria-pressed", String(lang === "zh"));
+    store("ddb-lang", lang);
+  }
+  function setTab(tab) {
+    var tech = tab === "tech";
+    document.getElementById("rules").hidden = tech;
+    document.getElementById("tech").hidden = !tech;
+    document.getElementById("tab-rules").setAttribute("aria-selected", String(!tech));
+    document.getElementById("tab-tech").setAttribute("aria-selected", String(tech));
+  }
+  function fromHash() { setTab(location.hash === "#tech" ? "tech" : "rules"); }
+
+  setLang(read("ddb-lang") === "zh" ? "zh" : "en");
+  fromHash();
+  window.addEventListener("hashchange", fromHash);
+
+  document.getElementById("lang-en").addEventListener("click", function () { setLang("en"); });
+  document.getElementById("lang-zh").addEventListener("click", function () { setLang("zh"); });
+  document.getElementById("tab-rules").addEventListener("click", function () { location.hash = "rules"; });
+  document.getElementById("tab-tech").addEventListener("click", function () { location.hash = "tech"; });
+
+  document.getElementById("copy-clone").addEventListener("click", function () {
+    var pre = document.getElementById("clone-cmd");
+    var status = document.getElementById("copy-status");
+    var done = function () { status.textContent = root.getAttribute("data-lang") === "zh" ? "已复制" : "Copied"; };
+    var fallback = function () {
+      var r = document.createRange(); r.selectNodeContents(pre);
+      var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      status.textContent = root.getAttribute("data-lang") === "zh" ? "已选中，按 Ctrl+C 复制" : "Selected. Press Ctrl+C to copy";
+    };
+    try {
+      navigator.clipboard.writeText(pre.textContent).then(done, fallback);
+    } catch (e) { fallback(); }
+  });
+})();
+</script>
+</body>
+</html>
