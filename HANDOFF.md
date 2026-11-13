@@ -1,62 +1,58 @@
 ---
 name: handoff
-description: 从云端会话交接给 Kurt 电脑上的 Claude：背景、已定决策、当前进度、下一步部署
+description: v3 交接（2026-11-14）：v3.0 地基在分支 v3 上、测试栈在跑、等 Kurt 验收；v3.1 工具容器和 v3.2 新闻素材已做完待接入；接手先读这页
 status: 有效
-updated: 2026-11-13
+updated: 2026-11-14
 ---
 
-# 交接：discord-deepseek-bot
+# 交接：discord-deepseek-bot v3
 
-结论：代码已完成并在 Linux Docker 里验证过隔离；**还没在 Kurt 电脑上部署过**。你（电脑上的 Claude）的任务是：装 Docker Desktop → 部署 → 跑隔离自检 → Discord 里实测。
+结论：**v3.0（多群配置）代码完成，在分支 `v3`，测试栈在 `#bot-test` 跑着，等 Kurt 验收**。正式 bot（TiredFX Guy）仍是 v2，没动过。v3.1 工具容器、v3.2 新闻素材都已做完并单独测通，还没接进 bot。
 
-## 背景（为什么是这个方案）
+设计全文：[docs/notes/design-v3.md](docs/notes/design-v3.md)。计划（grill 结果）：`C:\Users\suzyz\.claude\plans\lazy-inventing-globe.md`。v2 时期的交接内容见 git 历史。
 
-- Kurt 要一个 DeepSeek 驱动的 Discord 聊天 bot，给他和几个朋友用。
-- 不用云托管（Fly.io 等）：Kurt 想跑在自己常开的 Windows 电脑上，并用手机 Remote Control 遥控电脑上的 Claude 来管理 bot。
-- 不用 Claude Code 的 Discord channels：那样回话的是 Claude 而不是 DeepSeek，而且 Discord 里的人能指挥一个碰得到电脑文件的 agent，违反隔离要求。
-- 硬要求：bot 锁死在 sandbox（Docker 容器）里，碰不到电脑文件、进程、局域网；出网只走白名单。控制方向单向：手机 → 电脑上的 Claude → `docker compose` → 容器；容器不能反向碰到 Claude 或主机。
+## 现在在跑什么
 
-## Grill 已定决策
-
-| 项 | 决定 |
+| 东西 | 状态 |
 |---|---|
-| 使用者 | Kurt + 几个朋友（`ALLOWED_USER_IDS`） |
-| 触发 | 频道里 @bot，或私信；白名单里的人都能私信 |
-| 服务器 | Kurt 已有的服务器，限定频道（`ALLOWED_CHANNEL_IDS`） |
-| 模型 | 只用 `deepseek-flash`，没有 admin，所以没人能 `/model` 切换 |
-| 人设 | 英语、活泼、4chan 屌丝风、可以骂脏话；底线：不针对群体的仇恨用语、不人肉/威胁真人（`prompts/default.txt`） |
-| 花费 | DeepSeek 只充小额余额；`max_messages: 12` |
-| 网络 | 第一阶段就上 Squid 白名单代理（`egress/`），拦私网 IP |
-| Kurt 的网络 | 不需要 VPN / 代理，直连 Discord |
-| 朋友访问仓库 | 以 collaborator 方式；Kurt 明确说**不需要**“部署前检查 compose 是否被改”的规则 |
+| 正式栈 `discord-deepseek-bot*`（4 个容器） | v2，镜像 `discord-deepseek-bot:local`（= `:v2.2` 标签），**不要动** |
+| 测试栈 `-p ddb-staging`（`docker-compose.staging.yml`） | v3 代码，镜像 `:v3dev`，bot = Kurt News 应用（显示名 `news-turtle#8647`），`env_file: .env.staging`，数据 `data-staging\`，只在 `#bot-test`（`1570775686862471301`）说话 |
+| 任务计划程序 `HorizonNewsMaterial` | 每天 07:30 跑 `news-pipeline\horizon_material.py`，写 `data-staging\shared\news\material-*.json`（正式上线时改成 `data\`） |
+| news-pipeline 的乌龟 `bot.py` | 已停，代码保留到 v3.2 后退役 |
 
-## 当前进度
+- 头脑警察群 ID `1317847113559965736`；配置 `data-staging\guilds\1317847113559965736\config.yaml`（tiredfx、owner、回复 100/每人 30、查询 60/每人 20）。
+- 备份：`data-backup-20261114\`（v2 原始数据）。
+- 改了代码后重启测试 bot：`docker build -t discord-deepseek-bot:v3dev .` → `docker compose -f docker-compose.staging.yml -p ddb-staging up -d --force-recreate bot`。
+- 单测：`docker run --rm -v "${PWD}:/src:ro" -w /src -e PYTHONDONTWRITEBYTECODE=1 --entrypoint python discord-deepseek-bot:v3dev -m unittest discover -s tests`（2026-11-14 最后一次：245 个全过）。
 
-- [x] 代码、`chatbot-ops` skill、README、AGENTS.md 完成，推在分支 `claude/discord-deepseek-bot-gd21vx`。
-- [x] hub 已登记（`D:\Kurt\hub\projects\INDEX.md`，hub 仓库同名分支，还没合进 main）。
-- [x] Kurt 已在 Developer Portal 建好 bot、关掉 Public Bot（Install Link 设为 None）、打开 Message Content Intent，bot 已进服务器（离线）。
-- [x] Kurt 已打开 Discord 开发者模式。
-- [x] DeepSeek key、user ID / channel ID：Kurt 已填进 `.env`。
-- [x] Docker Desktop 安装、部署、隔离自检（2026-11-13，见 [docs/notes/windows-deploy.md](docs/notes/windows-deploy.md)）。
-- [ ] Discord 实测：频道 @bot、私信、非白名单用户无响应。
-- [x] v2（自写 bot）代码完成：`bot.py` / `fetcher.py` / `scheduler.py` 写好，隔离在 Docker 里测过，scheduler 的 `--once recap|topics --dry-run` 跑通（见 [docs/notes/design-v2.md](docs/notes/design-v2.md)）。
-- [x] 2026-11-13：scheduler 已启动（22:00 总结、08:00/08:30 预抓、09:00 话题）；Reddit 改走公开 RSS（两组合并订阅）；仓库已公开（MIT，默认分支 `main`）；双语说明页已发布为 claude.ai Artifact（私有，Kurt 用 Share 分享）。
-- [ ] v2 待办：Discord 实测（@、插话、附件 / 网址、写 md、`/rule`、`/feed`、`#general` 不回、私信只回 Kurt）；第一次 09:00 时确认 Reddit 第二组没被限流。
+## v3.0 已做（分支 `v3`，5 个提交）
+
+- 每群一个文件夹 `data/guilds/<群ID>/`（config.yaml、profile/ 六块、recaps/、interests.md）；私信 = `dm-owner`。
+- 功能登记表 + 信任等级（owner/public）封顶；`guildcfg.py` 热重载。
+- 人设库 `data/shared/personas/`：`_base.md`（底线 7 条，Kurt 已审）、`tiredfx`、`turtle`、`_styles/normal|chatty`；`persona.py` 拼接。
+- 按群记忆 `guildmem.py`（块上限、token 预算）；scheduler 按群跑 recap/topics。
+- `/setup`（`setup_ui.py`）：三页、中英切换（按群记 `setup_language`）；只有 owner 和群 `admins` 能用（还要 Discord“管理服务器”权限）；`trust` 和 `admins` 只有 owner 能改（服务端强制）；每次保存有变化就私信 owner，只列改动。
+- 额度两层：群/每人 × 回复/查询；用完立刻私信 owner（同一件事一个周期一次）；`/feed` 补全群，`/feed @某人` 只补这个人；计数不存盘（重启回满，Kurt 定的简单版）。
+- 用户黑名单 `blocked_users`：@ 不回、不插话；总结照读。
+- 未配置的群：静默 + 私信 owner 去 `/setup`；首次 `/setup` 生成保守默认（public、consent 关、只开聊天）。
+- `migrate_v3.py`：v2 数据 → 按群结构（测试栈已用真设置跑过）。
+- `AGENTS.md` 的工具规则和挂载规则已按 Kurt 同意改写。
 
 ## 下一步（按顺序）
 
-1. 检查 Docker Desktop；没有就 `winget install -e --id Docker.DockerDesktop`（UAC 弹窗 Kurt 来点），WSL2 后端，装完提醒 Kurt 重启，并打开“登录时启动”。确认 **Docker Engine ≥ 28**（`gateway_mode_ipv4: isolated` 依赖它）。
-2. `powercfg /change standby-timeout-ac 0`，插电不睡眠。
-3. 加载 skill `chatbot-ops`，按 [README.md](README.md) 部署。复制 `.env.example` 为 `.env` 后**停下来**，让 Kurt 自己用记事本填密钥和 ID。不读、不打印 `.env`。
-4. Kurt 说填好后：`docker compose up -d --build`，按 README 跑完隔离自检，确认 `docker network inspect` 里 `botnet` 没有 Gateway。
-5. 让 Kurt 在允许的频道 @bot、再私信 bot；再让一个不在白名单的人试，应无响应。
+1. **等 Kurt 在 `#bot-test` 验收 v3.0**：@ 聊天（TiredFX 口吻、会用群档案）、`/setup` 改一项立即生效、中英切换、`/feed` / `/feed @人`、`/rule`、黑名单、管理员（女朋友账号）、改设置收到私信、把每人上限临时改 2 测“没电”和私信。另建一个空服务器用邀请链接拉测试 bot，走一遍“未配置 → 私信 → /setup”。测试 bot 邀请链接：`https://discord.com/oauth2/authorize?client_id=1570772366794166322&permissions=2147568640&scope=bot%20applications.commands`
+2. **v3.1 接工具**（线 B 已在 `tools/`、`searxng/`、`docker-compose.tools.yml`、`egress/squid.tools.snippet.conf`，29 个单测过，三个工具实测通）：
+   - 合并：tools（172.30.0.21）、searxng（.22）进 compose（正式和 staging 各一份 IP），squid 片段并进 `squid.conf` / `squid.staging.conf`，SearXNG `secret_key` 部署时生成、不提交；不开 DuckDuckGo（验证码）。
+   - bot 侧：`mcp>=1.30,<2` 客户端连 `http://<tools IP>:8090/mcp`；DeepSeek function calling 循环插在 `Bot.reply` 调模型之前；`effective(cfg,"tools")` 才带工具；给模型的工具 schema 里**不出现** `guild_id`/`allow_domains`（由 bot 注入）；每次调用 `try_charge_lookup()`；≤4 次、抓回合计 ≤4 万字符；public 群不带工具。
+   - 派 Flash（**只用 Flash，见 delegate-coding 2.2.0**），任务拆小。
+3. **v3.2 新闻**：scheduler 加 `news` 功能，读 `data/shared/news/material-<日期>.json`，按群 `interests.md`（没有就 `threads`）挑 N 条、按群 `news-seen.json` 去重、人设开场一句 + 每条一条短消息 + 可选吐槽；长文存 `data/shared/news/digests/`。头脑警察 09:00、5 条。`interests.md` 由 Kurt 手写（可先把 `news-pipeline\memory\profile.md` 译成英文当草稿）。
+4. **正式上线（每批）**：打镜像标签、备份 `data\`、对 `data\` 跑 `migrate_v3.py`（`docker run --env-file .env ...`，迁移后把头脑警察 `replies_per_day` 改成 100）、复制 `data-staging\shared\personas\` 到 `data\shared\`、`docker compose up -d --build`；`HorizonNewsMaterial` 改写 `data\`；补 `prompts/about.md` changelog 和 `docs/index.html` What's new（v3.0 草稿 A3 已写，后来加的中英切换、两层额度、黑名单/管理员还没写）；`check.py` 项目；合并 `v3` 进 `main`（先问 Kurt）。
+5. **收尾**：`chatbot-ops` skill 补固定流程（加群/改设置/退群/体检，含正式 bot 邀请链接）；`.env` 里旧 llmcord 变量（`ALLOW_DMS`、`ALLOWED_USER_IDS` 等）清理；Kurt News 应用和 news-pipeline 的 `bot.py`/`push.py`/`news-agent.ps1` 退役；hub inbox `002-news-pipeline.md` 标完成。
 
-## 没验证过的点（重点看）
+## 待办 / 注意
 
-- Windows 版 Docker Desktop 是否和 Linux 一样遵守 `gateway_mode_ipv4: isolated` 和 `host.docker.internal` 屏蔽：README 里的自检命令就是为此准备的，失败就停下来告诉 Kurt，不要放松隔离去“修好”。
-- `deepseek-flash` 模型 ID 和价格来自搜索结果（云端连不上 DeepSeek 官网）。如果报模型不存在，查 DeepSeek 文档后改 `.env` 的 `DEEPSEEK_MODEL`。
-- Squid 只在连接关闭时记 CONNECT 日志，所以长连的 Discord gateway 不会马上出现在 egress 日志里，这是正常的。
-
-## 第二阶段（还没开始）
-
-给 DeepSeek 加工具时：换成自写 bot（DeepSeek function calling + `run_in_sandbox` 工具），另起一个**没有任何密钥**的 sandbox 容器，经同一个 egress 出网，白名单加 PyPI、npm、GitHub、Wikipedia。开始前先和 Kurt 走一遍 grill。
+- **hub 未提交**：`global/agent-ops/skills/delegate-coding/` 三个文件有改动（含 2.2.0“只用 Flash”和别处来的改动），Kurt 说“能提交的时候再提交”——提交前先列出全部改动给 Kurt 确认。
+- `%TEMP%\squidcheck` 里两个临时文件删不掉，无害，Kurt 可手动删。
+- Whisper 转写（读视频没字幕时）留到以后：要在 fetcher/tools 的“禁止本机”规则上开端口口子，需 Kurt 同意。读视频第一版不带 cookies。
+- “访问 Kurt 电脑”（读指定文件夹）下一轮再做：官方 filesystem MCP、只读挂载指定目录，那一轮断开上网。
+- 测试栈的 recap（22:00）和 topics（09:00）是开着的，会往 `#bot-test` 发。

@@ -150,6 +150,14 @@ tools / SearXNG 出网只经 egress：公网 443，私网和本机照拦
 - 已做完可复用（2026-11-13）：hub skill `fetch-and-summarize`（30 个测试，字幕/Whisper/网页）、Horizon（已配 DeepSeek）、`news-pipeline\fetch.py` 的解析和去重（改成按群）、打字节奏。退役：`news-pipeline` 的 `bot.py` 主体、`push.py`、`news-agent.ps1`、Kurt News 应用。
 - `fetch_video.py` 按 Windows 写（AppData 的 ffmpeg、显卡 DLL），进 Linux 容器只搬字幕路径；Whisper 转写留在主机，下一轮再接（要在 fetcher 的“禁止本机”规则上开一个端口口子，需 Kurt 同意）。
 
+## 12. 实现中追加的决定（2026-11-14）
+
+- **额度两层**：`replies_per_day`/`replies_per_user`、`lookups_per_day`/`lookups_per_user`，哪层先到都拦；用完立刻私信 owner（同一件事一个周期一次）；`/feed` 补全群，`/feed @某人` 只补这个人。简单版：不合并通知、计数不存盘（重启回满）。
+- **用户黑名单** `blocked_users`：@ 不回、不插话、不计入插话计数；总结照读。owner 永远不会被拉黑。
+- **管理员** `admins`：能用 `/setup`、`/feed`；仍需 Discord“管理服务器”权限才看得到 `/setup`。`trust` 和 `admins` 只有 owner 能改（服务端强制）。owner 永远是管理员。
+- **改配置通知**：任何人（含 owner）保存 `/setup` 且有变化，私信 owner，只列改动，名单显示人名不显示 ID。
+- **`/setup` 中英切换**：每页一个按钮，按群记 `setup_language`（只管界面语言）。
+
 ## 已定
 
 - 头脑警察：`persona: tiredfx`（旧人设），`trust: owner`。
