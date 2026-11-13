@@ -7,11 +7,11 @@ updated: 2026-11-13
 
 # 在 Kurt 电脑上的部署
 
-结论：2026-11-13 已在 Kurt 的 Windows 11 电脑上部署成功，隔离自检全部通过，bot 名 `deepseekbot-kurt`，在服务器 `FX NEVER SLEEPS` 的 `#deepseek-go-cray` 频道。完整部署步骤和安全边界以根目录 `README.md` 为准，这里只记这台电脑的情况和坑。
+结论：2026-11-13 已在 Kurt 的 Windows 11 电脑上部署成功，隔离自检全部通过，bot 跑在 Kurt 和朋友们的私人服务器里。完整部署步骤和安全边界以根目录 `README.md` 为准，这里只记这台电脑的情况和坑。
 
 ## 部署方式（一句话版）
 
-Docker Desktop（WSL2 后端）里跑两个容器：`bot`（llmcord）只接内部网络 `botnet`，唯一出口是 `egress`（Squid 白名单代理）。Claude Code 在容器外用 `docker compose` 管理，控制方向单向：手机 → 电脑上的 Claude → `docker compose` → 容器。
+Docker Desktop（WSL2 后端）里跑四个容器（v2，见 `design-v2.md`）：`bot`、`scheduler` 只接内部网络 `botnet`，只能经 `egress`（Squid）连 Discord 和 DeepSeek；无密钥的 `fetcher` 经 egress 能上公网。Claude Code 在容器外用 `docker compose` 管理，控制方向单向：手机 → 电脑上的 Claude → `docker compose` → 容器。
 
 ## 这台电脑的状态
 

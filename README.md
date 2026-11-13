@@ -74,7 +74,7 @@ powercfg /change monitor-timeout-ac 15    # 屏幕可以关，不影响 bot
 2. 右键自己的头像 → **复制用户 ID（Copy User ID）**，填进 `OWNER_USER_ID`。
 3. 右键服务器里的频道（或分类）→ **复制频道 ID（Copy Channel ID）**：
    - `BLOCKED_CHANNEL_IDS`：bot 完全安静的频道，比如 `#general`；
-   - `POST_CHANNEL_ID`：总结和话题发到哪个频道，比如 `#deepseek-go-cray`。
+   - `POST_CHANNEL_ID`：总结和话题发到哪个频道，比如一个专门给 bot 的频道。
 
 ## 4. DeepSeek API key
 
