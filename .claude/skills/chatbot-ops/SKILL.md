@@ -56,7 +56,8 @@ Get-Content .env | ForEach-Object {
 
 ```powershell
 docker compose up -d                 # 全部启动，或按新 .env 重建
-docker compose up -d --build         # 改了 *.py、prompts/、Dockerfile、egress/ 之后
+docker compose build bot; docker compose up -d   # 改了 *.py、prompts/、Dockerfile 之后（scheduler 和 fetcher 复用 bot 的镜像，`up -d --build fetcher` 不会重建它）
+docker compose up -d --build egress  # 改了 egress/ 之后
 docker compose stop scheduler        # 只停每日任务
 docker compose down                  # 删容器和网络（data\ 保留）
 ```
@@ -107,6 +108,8 @@ function Set-EnvKey([string]$Key, [string]$Value) {
 
 - 手动跑一次：`docker compose run --rm --no-deps scheduler --once recap`（或 `topics`）；加 `--dry-run` 只打印，不发、不存。
 - 本地记忆在 `data\`：`group-profile.md`（顶部 Kurt 区 bot 不改）、`recaps\YYYY-MM-DD.md`（只留 10 天）。不要删，删了它就忘了群的方向。
+- 话题素材提前抓：08:00 全抓、08:30 补抓空的源，存 `data\material.json`，09:00 发完即删；没缓存就 09:00 当场抓。手动：`--once prefetch` / `--once refetch`。
+- Reddit 走公开 RSS，两组合并订阅（`reddit-weird`、`reddit`），同站请求间隔 5 秒、429 按 Retry-After 等一次。
 - 错过的时间点不补。
 - RSS 源列表在 `scheduler.py` 的 `FEEDS`、`WEIRD_SUBS`、`OTHER_SUBS`；改完 `docker compose up -d --build scheduler`。
 - 写法（几条要点、语气）在 `scheduler.py` 的 `recap()` / `topics()` 提示词里。

@@ -82,6 +82,9 @@ updated: 2026-11-13
   - GitHub：GitHub Trending 镜像
   - Reddit（跳过 NSFW）：r/popular、r/nottheonion、r/Showerthoughts、r/mildlyinfuriating、r/oddlyterrifying、r/AskReddit、r/NoStupidQuestions、r/Houdini、r/vfx、r/LocalLLaMA
   - 不用 4chan。搜索 API 以后再研究。
+- Reddit 走公开 RSS（匿名 JSON 接口被 Reddit 403），10 个版块合成 2 个合并订阅；官方 API 暂不用，RSS 经常失败再考虑。
+- 素材提前抓：08:00 全抓，08:30 只补抓空的源，存 `data/material.json`，09:00 用完即删。
+- fetcher 把 `http://` 链接和跳转升级成 `https://`（egress 只放行 443）。
 - 错过不补。
 
 ## 本地 `data\`

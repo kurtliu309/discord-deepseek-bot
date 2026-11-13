@@ -167,19 +167,41 @@ def client():
     return httpx.Client(timeout=20, follow_redirects=True, headers={"User-Agent": UA}, max_redirects=5)
 
 
+def https(url):
+    # egress only allows HTTPS (CONNECT 443): upgrade plain http links and redirects.
+    return "https://" + url[len("http://"):] if url.lower().startswith("http://") else url
+
+
 def download(url):
-    if not re.match(r"^https?://", url):
+    if not re.match(r"^https?://", url, re.IGNORECASE):
         raise ValueError("only http(s) urls")
-    with client() as c, c.stream("GET", url) as r:
-        r.raise_for_status()
-        if int(r.headers.get("content-length") or 0) > MAX_BYTES:
+    url = https(url)
+    with client() as c:
+        for _ in range(6):  # follow redirects by hand so each hop is upgraded to https
+            r = c.send(c.build_request("GET", url), stream=True, follow_redirects=False)
+            if r.is_redirect and r.headers.get("location"):
+                r.close()
+                url = https(str(r.url.join(r.headers["location"])))
+                continue
+            break
+        else:
+            raise ValueError("too many redirects")
+        try:
+            return _read(r)
+        finally:
+            r.close()
+
+
+def _read(r):
+    r.raise_for_status()
+    if int(r.headers.get("content-length") or 0) > MAX_BYTES:
+        raise ValueError("too big (> 10 MB)")
+    buf = bytearray()
+    for chunk in r.iter_bytes():
+        buf += chunk
+        if len(buf) > MAX_BYTES:
             raise ValueError("too big (> 10 MB)")
-        buf = bytearray()
-        for chunk in r.iter_bytes():
-            buf += chunk
-            if len(buf) > MAX_BYTES:
-                raise ValueError("too big (> 10 MB)")
-        return bytes(buf), r.headers.get("content-type", ""), str(r.url)
+    return bytes(buf), r.headers.get("content-type", ""), str(r.url)
 
 
 def fetch_url(url):

@@ -23,6 +23,7 @@ Usage:
 import argparse
 import asyncio
 import datetime as dt
+import json
 import os
 import re
 import sys
@@ -169,6 +170,27 @@ class Memory:
         if PROFILE_KURT_HEADER not in kurt:
             kurt = f"# Group profile\n\n{PROFILE_KURT_HEADER}\n\n" + kurt
         self.profile_path.write_text(f"{kurt}\n{PROFILE_BOT_HEADER}\n\n{notes.strip()}\n", encoding="utf-8")
+
+    # Topic material fetched ahead of 09:00 (deleted once the topics are posted).
+    @property
+    def material_path(self):
+        return self.root / "material.json"
+
+    def load_material(self, date):
+        try:
+            data = json.loads(self.material_path.read_text(encoding="utf-8"))
+            return data["items"] if data.get("date") == date else {}
+        except (OSError, ValueError, KeyError):
+            return {}
+
+    def save_material(self, date, items):
+        self.material_path.write_text(json.dumps({"date": date, "items": items}), encoding="utf-8")
+
+    def clear_material(self):
+        try:
+            self.material_path.unlink()
+        except OSError:
+            pass
 
     def last_recaps(self, n):
         files = sorted(self.recaps.glob("*.md"))[-n:]
@@ -341,9 +363,43 @@ class Jobs:
         if new:
             self.memory.save_profile_notes(new)
 
+    async def fetch_material(self, only=None):
+        """{feed name: [items]} for every feed (or only the named ones). Empty list = failed."""
+        groups = [([{"name": n, "url": u} for n, u in FEEDS], 6), (reddit_feeds(), 30)]
+        out = {}
+        for feeds, per_feed in groups:
+            feeds = [f for f in feeds if only is None or f["name"] in only]
+            if not feeds:
+                continue
+            items = await fetcher_post("/rss", {"feeds": feeds, "per_feed": per_feed})
+            for f in feeds:
+                out[f["name"]] = [i for i in items if i["source"] == f["name"]]
+        return out
+
+    async def prefetch(self, retry_only=False):
+        """08:00 fetch everything; 08:30 (retry_only) re-fetch only the feeds that came back empty."""
+        date = dt.datetime.now(TZ).strftime("%Y-%m-%d")
+        material = self.memory.load_material(date) if retry_only else {}
+        failed = [n for n, items in material.items() if not items] if retry_only else None
+        if retry_only and not material:
+            failed = None  # nothing cached (08:00 missed): fetch everything now
+        if failed == []:
+            log("prefetch retry: nothing to retry")
+            return
+        material.update(await self.fetch_material(failed))
+        empty = [n for n, items in material.items() if not items]
+        log(f"prefetched {sum(map(len, material.values()))} items; empty feeds: {empty or 'none'}")
+        if not self.dry_run:
+            self.memory.save_material(date, material)
+
     async def topics(self):
-        feeds = await fetcher_post("/rss", {"feeds": [{"name": n, "url": u} for n, u in FEEDS], "per_feed": 6})
-        reddit = await fetcher_post("/rss", {"feeds": reddit_feeds(), "per_feed": 30})
+        date = dt.datetime.now(TZ).strftime("%Y-%m-%d")
+        material = self.memory.load_material(date)
+        missing = [n for n, items in material.items() if not items] if material else None
+        if missing is None or missing:
+            material.update(await self.fetch_material(missing))  # nothing cached, or fill the gaps now
+        feeds = [i for n, items in material.items() if not n.startswith("reddit") for i in items]
+        reddit = [i for n, items in material.items() if n.startswith("reddit") for i in items]
         log(f"material: {len(feeds)} feed items, {len(reddit)} reddit posts")
 
         def fmt(items):
@@ -380,6 +436,8 @@ class Jobs:
                 if today is not None:
                     await self.update_profile(text)
                     log("group profile updated")
+            elif name in ("prefetch", "refetch"):
+                await self.prefetch(retry_only=(name == "refetch"))
             else:
                 text = await self.topics()
                 if self.dry_run:
@@ -387,8 +445,14 @@ class Jobs:
                     return
                 await self.discord.post_message(self.channel, text, allow_users=False)
                 log(f"posted topics ({len(text)} chars)")
+                self.memory.clear_material()
         except Exception as e:  # keep the loop alive; never print secrets
             log(f"{name} failed: {type(e).__name__}: {e}")
+
+
+def minus(hhmm, minutes):
+    total = (hhmm[0] * 60 + hhmm[1] - minutes) % (24 * 60)
+    return total // 60, total % 60
 
 
 def next_run(now, hhmm):
@@ -401,7 +465,8 @@ async def forever(jobs):
         f"count={TOPICS_COUNT} model={MODEL} post_channel={jobs.channel} data={DATA_DIR} proxy={env('HTTPS_PROXY')}")
     while True:
         now = dt.datetime.now(TZ)
-        name, when = min((("recap", next_run(now, SUMMARY_AT)), ("topics", next_run(now, TOPICS_AT))), key=lambda x: x[1])
+        slots = [("recap", SUMMARY_AT), ("prefetch", minus(TOPICS_AT, 60)), ("refetch", minus(TOPICS_AT, 30)), ("topics", TOPICS_AT)]
+        name, when = min(((n, next_run(now, t)) for n, t in slots), key=lambda x: x[1])
         log(f"next: {name} at {when.isoformat(timespec='minutes')}")
         while (left := (when - dt.datetime.now(TZ)).total_seconds()) > 0:
             await asyncio.sleep(min(left, 300))
@@ -415,7 +480,7 @@ async def forever(jobs):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--once", choices=("recap", "topics"))
+    p.add_argument("--once", choices=("recap", "prefetch", "refetch", "topics"))
     p.add_argument("--dry-run", action="store_true")
     a = p.parse_args()
     for k in ("DISCORD_BOT_TOKEN", "DEEPSEEK_API_KEY"):
