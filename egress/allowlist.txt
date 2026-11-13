@@ -1,4 +1,5 @@
-# Egress allowlist for the bot (Squid dstdomain syntax). One entry per line.
+# Egress allowlist for the KEYED containers (bot, scheduler) (Squid dstdomain syntax). One entry per line.
+# The keyless fetcher is not limited by this list (any public host); see squid.conf.
 # A leading dot matches the domain AND all subdomains (".discord.gg" = discord.gg, gateway.discord.gg, gateway-us-east1-b.discord.gg, ...).
 # Only HTTPS CONNECT to port 443 is allowed, and only if the resolved IP is public.
 # After editing: docker compose up -d --build egress

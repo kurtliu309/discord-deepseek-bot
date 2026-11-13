@@ -1,10 +1,13 @@
-# Hardened llmcord (Discord <-> DeepSeek) bot behind an allowlist egress proxy. Stage 1: chat only.
+# Discord <-> DeepSeek chat bot (v2, see docs/notes/design-v2.md). Chat only: the model has no tools.
 #
-#   bot  --(botnet, internal: no route out)-->  egress (Squid allowlist)  --(egress_net)-->  internet
+#   bot, scheduler (hold secrets) --botnet--> egress (Squid) --egress_net--> Discord + api.deepseek.com only
+#   fetcher (NO secrets)          --botnet--> egress (Squid) --egress_net--> any public host (443)
+#   bot, scheduler --botnet--> fetcher:8080 (URLs, files, RSS -> plain text)
 #
-# Isolation rules (do not relax): no ports, no volumes / bind mounts, no docker socket,
-# not privileged, non-root, read-only root fs, all capabilities dropped, and the bot is
-# attached to `botnet` ONLY.
+# Isolation rules (do not relax): no ports, no docker socket, not privileged, non-root,
+# read-only root fs, all capabilities dropped, everything on `botnet` only (egress also on
+# egress_net). The ONLY mount is ./data -> scheduler:/data (group profile + recaps).
+# Addresses on botnet are pinned because egress/squid.conf applies rules per source address.
 
 name: discord-deepseek-bot
 
@@ -22,6 +25,20 @@ x-hardening: &hardening
     options:
       max-size: "10m"
       max-file: "3"
+
+x-proxy-env: &proxy-env
+  HTTPS_PROXY: http://egress:3128
+  HTTP_PROXY: http://egress:3128
+  https_proxy: http://egress:3128
+  http_proxy: http://egress:3128
+  NO_PROXY: fetcher
+  no_proxy: fetcher
+
+x-no-host-names: &no-host-names
+  # Belt and braces: Docker Desktop host names resolve to the container's own loopback.
+  - "host.docker.internal:127.0.0.1"
+  - "gateway.docker.internal:127.0.0.1"
+  - "kubernetes.docker.internal:127.0.0.1"
 
 services:
   egress:
@@ -42,8 +59,9 @@ services:
     cpus: 0.25
     pids_limit: 50
     networks:
-      - botnet       # bot -> egress
-      - egress_net   # egress -> internet
+      botnet:
+        ipv4_address: 172.30.0.2
+      egress_net: {}
 
   bot:
     <<: *hardening
@@ -54,19 +72,13 @@ services:
     container_name: discord-deepseek-bot
     depends_on:
       - egress
-
+      - fetcher
     # Secrets + settings come only from .env (passed as environment variables;
     # the .env file itself is NOT mounted and is excluded from the image by .dockerignore).
     env_file:
       - .env
     environment:
-      HTTPS_PROXY: http://egress:3128
-      HTTP_PROXY: http://egress:3128
-      https_proxy: http://egress:3128
-      http_proxy: http://egress:3128
-      NO_PROXY: ""
-      no_proxy: ""
-
+      <<: *proxy-env
     user: "10001:10001"
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
@@ -74,60 +86,86 @@ services:
     memswap_limit: 256m
     cpus: 0.5
     pids_limit: 100
-
-    # Internal network only: the bot has no route to the internet, the host or the LAN;
-    # it can only talk to the egress proxy. No `ports:`.
     networks:
-      - botnet
-    # Belt and braces: Docker Desktop host names resolve to the container's own loopback.
-    extra_hosts:
-      - "host.docker.internal:127.0.0.1"
-      - "gateway.docker.internal:127.0.0.1"
-      - "kubernetes.docker.internal:127.0.0.1"
+      botnet:
+        ipv4_address: 172.30.0.10
+    extra_hosts: *no-host-names
 
-  # Daily recap (22:00) + morning topics (09:00). Same image and hardening as the bot,
-  # Discord REST + DeepSeek only, via egress. Stateless: earlier recaps are read back from Discord.
+  # Nightly recap (22:00) + morning topics (09:00). Same image and hardening as the bot.
   scheduler:
     <<: *hardening
     image: discord-deepseek-bot:local
     pull_policy: never
     container_name: discord-deepseek-bot-scheduler
-    entrypoint: ["python", "/opt/llmcord/scheduler.py"]
+    entrypoint: ["python", "/opt/app/scheduler.py"]
     depends_on:
       - egress
+      - fetcher
       - bot
     env_file:
       - .env
     environment:
-      HTTPS_PROXY: http://egress:3128
-      HTTP_PROXY: http://egress:3128
-      https_proxy: http://egress:3128
-      http_proxy: http://egress:3128
-      NO_PROXY: ""
-      no_proxy: ""
+      <<: *proxy-env
+      DATA_DIR: /data
     user: "10001:10001"
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    # The single allowed mount (design-v2): group profile + last 10 recaps. Nothing else.
+    volumes:
+      - type: bind
+        source: ./data
+        target: /data
+        read_only: false
+        bind:
+          create_host_path: true
     mem_limit: 128m
     memswap_limit: 128m
     cpus: 0.25
     pids_limit: 50
     networks:
-      - botnet
-    extra_hosts:
-      - "host.docker.internal:127.0.0.1"
-      - "gateway.docker.internal:127.0.0.1"
-      - "kubernetes.docker.internal:127.0.0.1"
+      botnet:
+        ipv4_address: 172.30.0.11
+    extra_hosts: *no-host-names
+
+  # Keyless fetcher: web pages, RSS, file parsing. NO env_file: it must never see a secret
+  # (fetcher.py also refuses to start if one is present).
+  fetcher:
+    <<: *hardening
+    image: discord-deepseek-bot:local
+    pull_policy: never
+    container_name: discord-deepseek-bot-fetcher
+    entrypoint: ["python", "/opt/app/fetcher.py"]
+    depends_on:
+      - egress
+    environment:
+      HTTPS_PROXY: http://egress:3128
+      HTTP_PROXY: http://egress:3128
+      https_proxy: http://egress:3128
+      http_proxy: http://egress:3128
+    user: "10001:10001"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.5
+    pids_limit: 50
+    networks:
+      botnet:
+        ipv4_address: 172.30.0.20
+    extra_hosts: *no-host-names
 
 networks:
   botnet:
     driver: bridge
     internal: true
     driver_opts:
-      # Docker Engine >= 28: give the bridge no host-side IP, so the bot cannot reach
+      # Docker Engine >= 28: give the bridge no host-side IP, so containers cannot reach
       # services on the host through the network gateway (internal: true alone still allows that).
       com.docker.network.bridge.gateway_mode_ipv4: isolated
     enable_ipv6: false
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
   egress_net:
     driver: bridge
     driver_opts:

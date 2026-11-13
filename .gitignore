@@ -13,3 +13,6 @@ venv/
 # misc
 .DS_Store
 *.log
+
+# local bot memory (group profile + recaps): personal data, never commit
+data/

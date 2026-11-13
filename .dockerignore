@@ -1,8 +1,8 @@
-# Only these are needed to build the bot image (egress/ has its own build context).
+# Only these are needed to build the app image (egress/ has its own build context).
 *
 !requirements.txt
-!entrypoint.py
+!bot.py
 !scheduler.py
-!config.template.yaml
+!fetcher.py
 !prompts/
 !prompts/**

@@ -1,8 +1,12 @@
-# Runtime deps of llmcord (upstream requirements.txt is unpinned; pinned here for reproducible builds)
+# Runtime deps for bot.py, scheduler.py and fetcher.py (pinned for reproducible builds)
 discord.py==2.7.1
 httpx==0.28.1
 openai==3.50.0
-python-dotenv==1.2.4
-PyYAML==6.0.3
-# scheduler.py: IANA time zones (python:slim has no system tzdata)
+# IANA time zones (python:slim has no system tzdata)
 tzdata==2025.2
+# fetcher.py only: file parsers and RSS (run in the keyless fetcher container)
+pypdf==5.4.0
+python-docx==1.1.2
+openpyxl==3.1.5
+python-pptx==1.0.2
+feedparser==6.0.11
