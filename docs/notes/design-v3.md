@@ -40,7 +40,7 @@ data\
 
 每件 bot 会做的事登记成一个功能：名字、最低信任等级、设置项、默认值。
 
-> **v3.7 起删除，见 [deepseek-server-search.md](deepseek-server-search.md)**：信任等级和“最低等级”列都不存在了，每项只看自己的开关。
+> **v4.0 起删除，见 [deepseek-server-search.md](deepseek-server-search.md)**：信任等级和“最低等级”列都不存在了，每项只看自己的开关。
 
 | 功能 | 是什么 | 最低等级 |
 |---|---|---|
@@ -69,14 +69,14 @@ features:
 quiet_channels: []
 ```
 
-- **信任等级是天花板**：功能要求的等级高于群的等级时，配置写 on 也不生效，`/setup` 里显示为灰色。（**v3.7 起删除，见 [deepseek-server-search.md](deepseek-server-search.md)**。）
+- **信任等级是天花板**：功能要求的等级高于群的等级时，配置写 on 也不生效，`/setup` 里显示为灰色。（**v4.0 起删除，见 [deepseek-server-search.md](deepseek-server-search.md)**。）
 - **每件事发生前查表**：哪个群 → 读它的配置 → 功能开着且等级够 → 只用这个群的文件夹去做。
 - **加新功能**：在登记表加一行，`/setup` 菜单和配置检查自动带上，各群默认关。
 - **没走流程的群**：bot 一句话不说，只记日志。
 
 ## 3. 两种“读网页”怎么分档
 
-> **v3.7 起删除，见 [deepseek-server-search.md](deepseek-server-search.md)**：`read_links` 开关和 `allow_domains` 都没了，贴来的链接永远读；`tools` 键保留，含义变成普通管理员也能开关的“搜索”。
+> **v4.0 起删除，见 [deepseek-server-search.md](deepseek-server-search.md)**：`read_links` 开关和 `allow_domains` 都没了，贴来的链接永远读；`tools` 键保留，含义变成普通管理员也能开关的“搜索”。
 
 - `read_links`：代码从消息里找链接 → fetcher 抓 → 当资料喂给模型。读什么是人选的。
 - `tools`：模型通过 function calling 自己发起搜索、读网页、读视频，最多来回几轮。读什么是模型选的。
@@ -129,7 +129,7 @@ data\shared\personas\
 
 ## 9. 信任等级到底信任什么
 
-> **v3.7 起删除，见 [deepseek-server-search.md](deepseek-server-search.md)**：不再区分 owner / public 群，搜索由管理员按群开关，默认关。
+> **v4.0 起删除，见 [deepseek-server-search.md](deepseek-server-search.md)**：不再区分 owner / public 群，搜索由管理员按群开关，默认关。
 
 信任的是**群里所有能发消息的人**。区别只有一条：**模型能不能自己动手找东西**（搜索、打开任意链接、读视频；下一轮还有读本机指定文件夹）。能找东西就可能被群里的人利用（藏指令的网页、烧余额），所以只给 owner 群。
 
@@ -163,7 +163,7 @@ tools / SearXNG 出网只经 egress：公网 443，私网和本机照拦
 
 - **额度两层**：`replies_per_day`/`replies_per_user`、`lookups_per_day`/`lookups_per_user`，哪层先到都拦；用完立刻私信 owner（同一件事一个周期一次）；`/feed` 补全群，`/feed @某人` 只补这个人。简单版：不合并通知、计数不存盘（重启回满）。
 - **用户黑名单** `blocked_users`：@ 不回、不插话、不计入插话计数；总结照读。owner 永远不会被拉黑。
-- **管理员** `admins`：能用 `/setup`、`/feed`；仍需 Discord“管理服务器”权限才看得到 `/setup`。`trust` 和 `admins` 只有 owner 能改（服务端强制）。owner 永远是管理员。（**v3.7 起删除，见 [deepseek-server-search.md](deepseek-server-search.md)**：`trust` 没了，只剩 `admins` 只有 owner 能改；搜索开关管理员能开。）
+- **管理员** `admins`：能用 `/setup`、`/feed`；仍需 Discord“管理服务器”权限才看得到 `/setup`。`trust` 和 `admins` 只有 owner 能改（服务端强制）。owner 永远是管理员。（**v4.0 起删除，见 [deepseek-server-search.md](deepseek-server-search.md)**：`trust` 没了，只剩 `admins` 只有 owner 能改；搜索开关管理员能开。）
 - **改配置通知**：任何人（含 owner）保存 `/setup` 且有变化，私信 owner，只列改动，名单显示人名不显示 ID。
 - **`/setup` 中英切换**：每页一个按钮，按群记 `setup_language`（只管界面语言）。
 
@@ -171,7 +171,7 @@ tools / SearXNG 出网只经 egress：公网 443，私网和本机照拦
 
 - 头脑警察：`persona: tiredfx`（旧人设），`trust: owner`。
 - 信任等级 owner / public 两档；owner 群工具放开。
-- （**v3.7 起删除，见 [deepseek-server-search.md](deepseek-server-search.md)**：信任等级两档和“owner 群工具放开”都不再适用。）
+- （**v4.0 起删除，见 [deepseek-server-search.md](deepseek-server-search.md)**：信任等级两档和“owner 群工具放开”都不再适用。）
 
 ## 待定（进计划模式 grill）
 

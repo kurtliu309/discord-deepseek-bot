@@ -124,7 +124,7 @@ class InterjectSettings(FeatureSettings):
 
 
 class ToolsSettings(FeatureSettings):
-    """v3.7: the "search" switch. On = the model may search the web itself.
+    """v4.0: the "search" switch. On = the model may search the web itself.
 
     The key stays ``tools`` so existing config files keep working; a guild without
     the switch on sends no tool list at all (AGENTS.md rule, enforced in code).
@@ -242,7 +242,7 @@ class GuildConfig(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _drop_legacy_keys(cls, value):
-        """v3.7 removed ``trust``, ``read_links`` and ``tools.allow_domains``.
+        """v4.0 removed ``trust``, ``read_links`` and ``tools.allow_domains``.
 
         Existing config files still carry these keys and the models forbid extras, so
         drop them silently before validation instead of failing the whole guild. A save

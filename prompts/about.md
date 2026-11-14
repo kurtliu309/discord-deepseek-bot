@@ -10,7 +10,7 @@ docker-compose.yml, egress/).
 Newest first. Same as the "What's new" box on the guide page. When asked what changed or
 what's new, answer from this list.
 
-- **v3.7 · 2026-11-15**
+- **v4.0 · 2026-11-15**
   - Web search now uses DeepSeek's built-in search, so results are much better.
   - The separate `tools` and SearXNG containers are gone. Reading pages and video
     subtitles moved into the fetcher, the only container that reads external content.

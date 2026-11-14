@@ -162,7 +162,7 @@ class TestNewsSchedule(NewsCase):
         self.assertEqual(scheduler.schedule_for(self.news_cfg(channel=None)), [])
 
     def test_news_needs_no_trust_level(self):
-        # v3.7 dropped trust levels; news is scheduled from the switch alone.
+        # v4.0 dropped trust levels; news is scheduled from the switch alone.
         self.assertEqual(scheduler.schedule_for(self.news_cfg()), [("news", (9, 0))])
 
     def test_tick_runs_news_at_its_own_time(self):

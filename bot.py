@@ -12,7 +12,7 @@ writes markdown docs only when asked, and spends a per-guild daily reply budget
 (``persona.py``); the guild profile blocks are read per feature (``guildmem.py``).
 
 Isolation is unchanged: Discord + DeepSeek go through the egress proxy (``$HTTPS_PROXY``);
-the ``fetcher`` container is reached directly on the internal network. Model tools (v3.7)
+the ``fetcher`` container is reached directly on the internal network. Model tools (v4.0)
 are read-only and implemented in ``toolloop.py``: every real reply carries ``read_page``
 and ``read_video``, and the ``tools`` ("search") switch adds ``search``. Each call is
 charged and capped; interjections carry no ``tools`` field at all.

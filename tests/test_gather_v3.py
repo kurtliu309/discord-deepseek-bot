@@ -244,7 +244,7 @@ class TestGatherDataV34(unittest.IsolatedAsyncioTestCase):
 
 
 # --------------------------------------------------------------------------- #
-# Bot.reply: links are always read (v3.7); jump-ins stay quiet
+# Bot.reply: links are always read (v4.0); jump-ins stay quiet
 # --------------------------------------------------------------------------- #
 
 
@@ -279,7 +279,7 @@ class WiringBot(bot.Bot):
         self.turns.append(turns)
         return "hello"
 
-    # v3.7: chat replies always carry the read tools, so they go through the tool loop.
+    # v4.0: chat replies always carry the read tools, so they go through the tool loop.
     tools = None
 
     async def ask_model_message(self, system, message_turns, max_tokens, tools=None):

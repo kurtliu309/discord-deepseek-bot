@@ -18,7 +18,7 @@ def make(**overrides):
 class TestDefaults(unittest.TestCase):
     def test_defaults(self):
         cfg = make()
-        self.assertFalse(hasattr(cfg, "trust"))  # v3.7 dropped trust levels
+        self.assertFalse(hasattr(cfg, "trust"))  # v4.0 dropped trust levels
         self.assertFalse(cfg.consent)
         self.assertEqual(cfg.persona, "tiredfx")
         self.assertEqual(cfg.style, "normal")
@@ -150,7 +150,7 @@ features:
 
 
 class TestLegacyKeys(unittest.TestCase):
-    """v3.7 dropped ``trust``, ``read_links`` and ``tools.allow_domains``.
+    """v4.0 dropped ``trust``, ``read_links`` and ``tools.allow_domains``.
 
     Config files written before still carry them, and the models forbid extras.
     """

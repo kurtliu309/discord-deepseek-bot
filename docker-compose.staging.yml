@@ -1,4 +1,4 @@
-# Staging stack for v3.7: same programs and hardening as docker-compose.yml, but a fully
+# Staging stack for v4.0: same programs and hardening as docker-compose.yml, but a fully
 # separate project so it can run next to the production stack without touching it.
 #
 #   bot, scheduler (hold secrets) --botnet--> egress (Squid) --egress_net--> Discord + api.deepseek.com only

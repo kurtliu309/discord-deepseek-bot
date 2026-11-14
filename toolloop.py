@@ -1,6 +1,6 @@
 """Model tool loop: schemas, the three read-only tools, and the capped loop.
 
-v3.7: the three tools are implemented here instead of in the old MCP ``tools`` container.
+v4.0: the three tools are implemented here instead of in the old MCP ``tools`` container.
 ``read_page`` / ``read_video`` ask the keyless fetcher (``POST /url`` / ``POST /video``);
 ``search`` calls DeepSeek's Anthropic-compatible endpoint with its built-in server-side
 ``web_search`` tool. The bot decides *which* tools a question may use (a plain array of

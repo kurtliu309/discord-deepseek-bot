@@ -22,7 +22,7 @@ updated: 2026-11-15
 - `allowed_domains: ["sidefx.com"]` **被忽略**，照样返回别的站。按群限制域名做不到，只能靠"只有 owner 群有搜索"。
 - 一问两次搜索：输入约 1 万 token，输出约 700。
 
-## Kurt 的决定（2026-11-15）→ v3.7
+## Kurt 的决定（2026-11-15）→ v4.0
 
 - 搜索改用 DeepSeek 自带的；删 SearXNG、tools 容器、MCP。读网页、读视频字幕并进 fetcher（唯一读外部内容的容器，无密钥）。
 - **删 public/owner 信任等级**。

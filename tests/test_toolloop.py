@@ -1,4 +1,4 @@
-"""v3.7 tools: schemas, fetcher-backed readers, DeepSeek search, caps and the bot gate.
+"""v4.0 tools: schemas, fetcher-backed readers, DeepSeek search, caps and the bot gate.
 
 No network: the fetcher and DeepSeek are ``httpx.MockTransport`` fakes.
 """

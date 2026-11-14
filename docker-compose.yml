@@ -1,4 +1,4 @@
-# Discord <-> DeepSeek chat bot (v3.7, see docs/notes/deepseek-server-search.md).
+# Discord <-> DeepSeek chat bot (v4.0, see docs/notes/deepseek-server-search.md).
 #
 #   bot, scheduler (hold secrets) --botnet--> egress (Squid) --egress_net--> Discord + api.deepseek.com only
 #   fetcher (NO secrets)          --botnet--> egress (Squid) --egress_net--> any public host (443)
