@@ -525,6 +525,7 @@ def video_opts():
         "socket_timeout": 30,
         "retries": 3,
         "noprogress": True,
+        "cachedir": False,  # root fs is read-only; nothing to cache between calls anyway
     }
     proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
     if proxy:
