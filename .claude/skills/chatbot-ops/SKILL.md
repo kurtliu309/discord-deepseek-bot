@@ -130,7 +130,7 @@ function Set-EnvKey([string]$Key, [string]$Value) {
 - 网址：只支持 `https://`（Squid 只放行 CONNECT 443）；GitHub `blob` 链接自动转 raw。
 - 链接统一走 `POST /read`：yt-dlp 有专门 extractor 认识的网址（YouTube、B站、Vimeo……，不联网判断）按视频读字幕，读不到就退回读网页，并在开头写明原因；其他按网页读。
 - 视频只读字幕，不下载、不听写（没有 Whisper）。YouTube 字幕优先人工 → 原语言自动 → 机翻最后（机翻轨最容易 429）。
-- B站：AI 字幕要登录，走 B站自己的接口 + 小号 cookies；字幕列表时有时无，代码重试 6 次。yt-dlp 带 cookies 读 B站在容器里会 403，所以 yt-dlp 永不带。
+- B站：AI 字幕要登录，走 B站自己的接口 + 小号 cookies；字幕列表时有时无，代码重试 6 次。yt-dlp 带 cookies 时拿到的 AI 字幕文件地址是 `http://`，Squid 只放行 https，于是 Squid 自己回 403（yt-dlp 报的 "Unable to download JSON metadata" 有误导）；我们的代码把它改成 `https://` 下载。所以 yt-dlp 永不带 cookies，也不要为此放开 Squid 的 http。
 - 读视频失败会在 fetcher 日志写一行 `video <host>: <原因>`（只记域名）。
 - 不读附件里的：`hip hda bgeo`、图片、压缩包、音视频文件。
 
