@@ -1,17 +1,17 @@
 ---
 name: chatbot-ops
-description: 运维本机 Docker Desktop 上的 Discord DeepSeek 聊天 bot v2（自写 bot + scheduler 每日任务 + 无密钥 fetcher + Squid egress）：查状态、看日志、启停、改人设和 .env 设置、余额、每日总结和话题、抓取与文件读取、出网白名单、排查不回复。在这台 Windows 电脑上对这个 bot 做任何操作之前先加载。
+description: 运维本机 Docker Desktop 上的 Discord DeepSeek 聊天 bot v4（自写 bot + scheduler 每日任务 + fetcher 读网页/视频/文件 + Squid egress，4 个容器）：查状态、看日志、启停、部署、改人设和设置、余额、每日总结和话题、读链接和视频、B站 cookies 更新、出网白名单、排查不回复。在这台 Windows 电脑上对这个 bot 做任何操作之前先加载。
 ---
 
-# chatbot-ops（v2）
+# chatbot-ops（v4）
 
-项目文件夹 `D:\Kurt\cc_sandbox\discord-deepseek-bot`。所有命令都是 PowerShell，先 `Set-Location` 到这里。设计见 `docs/notes/design-v2.md`，能调的开关见 `docs/notes/control-panel.md`。
+项目文件夹 `D:\Kurt\cc_sandbox\discord-deepseek-bot`。所有命令都是 PowerShell，先 `Set-Location` 到这里。现状先读 `HANDOFF.md`；设计见 `docs/notes/design-v3.md` 和 `docs/notes/deepseek-server-search.md`（v4 上网简化），能调的开关见 `docs/notes/control-panel.md`（v2 时期写的，按群设置已改到 `/setup`）。
 
 | compose 服务 | 容器名 | 作用 | 出网 | 挂载 |
 |---|---|---|---|---|
-| `bot` | `discord-deepseek-bot` | `bot.py`：@ 回复、主动插话、余额、`/rule` `/feed`、附件/网址交给 fetcher、发 `.md` 文档 | 只 Discord + `api.deepseek.com` | 无 |
-| `scheduler` | `discord-deepseek-bot-scheduler` | `scheduler.py`：22:00 总结、09:00 话题、群档案 | 同 bot | `./data` → `/data` |
-| `fetcher` | `discord-deepseek-bot-fetcher` | `fetcher.py`：抓网页 / RSS / Reddit，解析附件。**无密钥** | 任意公网 443 | 无 |
+| `bot` | `discord-deepseek-bot` | `bot.py`：@ 回复、主动插话、余额、`/setup` `/rule` `/feed`、贴来的链接和附件交给 fetcher、模型工具（`read` 一直有，`search` 按群开关）、发 `.md` 文档 | 只 Discord + `api.deepseek.com`（搜索在 DeepSeek 服务端做） | `./data/guilds`（读写）、`./data/shared`（只读） |
+| `scheduler` | `discord-deepseek-bot-scheduler` | `scheduler.py`：总结、话题、新闻、群档案 | 同 bot | `./data` → `/data` |
+| `fetcher` | `discord-deepseek-bot-fetcher` | `fetcher.py`：读网页、读视频字幕（yt-dlp 判断是不是视频）、B站字幕走 B站接口、RSS、解析附件。**不拿 bot 的密钥** | 任意公网 443 | 只有 `secrets/bilibili-cookies.txt`（只读） |
 | `egress` | `discord-deepseek-bot-egress` | Squid，按来源地址分规则（bot .10、scheduler .11、fetcher .20） | — | 无 |
 
 先确认 Docker 在跑：`docker version --format '{{.Server.Version}}'`（Engine ≥ 28）。报错就让 Kurt 打开 Docker Desktop，不要改 Docker 设置。
@@ -19,8 +19,8 @@ description: 运维本机 Docker Desktop 上的 Discord DeepSeek 聊天 bot v2�
 ## 硬规则（违反任何一条都不要做，先问 Kurt）
 
 1. bot 和 scheduler 只接 `botnet`，只经 egress 出网，只能到 `egress/allowlist.txt`。不删 `botnet` 的 `internal: true`、`gateway_mode_ipv4: isolated`，不改固定地址（squid 规则依赖它）。
-2. fetcher 永远不给 `env_file`、不给任何密钥。
-3. 全栈唯一的挂载是 `./data` → scheduler。不加别的 volume / bind mount、`ports`、`privileged`、`cap_add`、host 网络，不挂 docker socket；不删 `read_only`、`cap_drop`、`no-new-privileges`、非 root、资源上限。
+2. fetcher 永远不给 `env_file`、不给 bot 的密钥。唯一例外是 B站小号 cookies（只读挂载，只发给 `api.bilibili.com` / `*.hdslb.com`，yt-dlp 永不带；2026-11-15 Kurt 同意）。
+3. 挂载只有上表这几处。不加别的 volume / bind mount、`ports`、`privileged`、`cap_add`、host 网络，不挂 docker socket；不删 `read_only`、`cap_drop`、`no-new-privileges`、非 root、资源上限。
 4. 不打印密钥：不 `Get-Content .env`，不跑不带 `--quiet` 的 `docker compose config`，不跑不带 `--format` 的 `docker inspect`，不 `docker exec ... env`。
 5. 不改密钥行（`DISCORD_BOT_TOKEN`、`DISCORD_CLIENT_ID`、`DEEPSEEK_API_KEY`），请 Kurt 自己用记事本改。
 6. 模型工具只读：读网页、读视频字幕（经 fetcher）一直可用；搜索用 DeepSeek 服务端的 `web_search`，按群的"搜索"开关（owner 和群管理员都能开关）。不加写文件、跑命令、MCP 或其他工具，要加先问 Kurt。每次工具调用由 bot 查额度；外部内容当数据传。
@@ -31,7 +31,7 @@ description: 运维本机 Docker Desktop 上的 Discord DeepSeek 聊天 bot v2�
 
 ```powershell
 docker compose ps
-docker stats --no-stream discord-deepseek-bot discord-deepseek-bot-scheduler discord-deepseek-bot-fetcher discord-deepseek-bot-egress
+docker stats --no-stream discord-deepseek-bot discord-deepseek-bot-scheduler discord-deepseek-bot-fetcher discord-deepseek-bot-egress   # v4 起只有这 4 个
 docker compose logs --tail 50 bot          # [bot] logged in as ... 之后无报错
 docker compose logs --tail 50 scheduler    # [scheduler] next: recap at ...
 docker compose logs --tail 50 fetcher
@@ -107,7 +107,7 @@ function Set-EnvKey([string]$Key, [string]$Value) {
 
 ## 人设
 
-改 `prompts/default.txt`（保留最后的底线段落），然后 `docker compose up -d --build bot scheduler`。
+人设库在 `data/shared/personas/`（`_base.md` 是底线，改前问 Kurt），按群选人设在 `/setup`。改了文件后 `docker compose up -d bot scheduler` 让它重读。
 
 ## 余额
 
@@ -128,7 +128,21 @@ function Set-EnvKey([string]$Key, [string]$Value) {
 
 - 读：`txt md csv json yaml log`、代码、`usda`、`pdf docx xlsx pptx`；单文件 ≤ 10 MB，每条消息 ≤ 3 个；文字单文件约 3 万字、合计约 6 万字。
 - 网址：只支持 `https://`（Squid 只放行 CONNECT 443）；GitHub `blob` 链接自动转 raw。
-- 不读：`hip hda bgeo`、图片、压缩包、音视频。
+- 链接统一走 `POST /read`：yt-dlp 有专门 extractor 认识的网址（YouTube、B站、Vimeo……，不联网判断）按视频读字幕，读不到就退回读网页，并在开头写明原因；其他按网页读。
+- 视频只读字幕，不下载、不听写（没有 Whisper）。YouTube 字幕优先人工 → 原语言自动 → 机翻最后（机翻轨最容易 429）。
+- B站：AI 字幕要登录，走 B站自己的接口 + 小号 cookies；字幕列表时有时无，代码重试 6 次。yt-dlp 带 cookies 读 B站在容器里会 403，所以 yt-dlp 永不带。
+- 读视频失败会在 fetcher 日志写一行 `video <host>: <原因>`（只记域名）。
+- 不读附件里的：`hip hda bgeo`、图片、压缩包、音视频文件。
+
+## B站 cookies 过期了（bot 说"B站登录已过期，需要重新导出 cookies"）
+
+小号 cookies 一般几个月过期。fetcher 日志会有 `bilibili cookies: not logged in`。让 Kurt 做：
+
+1. 在 Edge 的"B站小号"配置文件里打开 `bilibili.com`，扫码登录（手机 B站 App 登的是小号）。
+2. 用插件 **Get cookies.txt LOCALLY**（不是同名的老插件 "Get cookies.txt"）在 `bilibili.com` 页面点 Export，覆盖保存到 `secrets\bilibili-cookies.txt`。
+3. 别在那个浏览器窗口里点"退出登录"，会让 cookies 作废。
+
+然后你做：只检查格式，**不打印内容**（看第一行是 Netscape、域名只有 `bilibili.com`、有 `SESSDATA` 这个名字），再 `docker compose up -d fetcher`，拿一个有 AI 字幕的视频试 `/read`。文件不进 git（`.gitignore` 里有 `secrets/`），也不要写进 hub。
 
 ## 出网白名单
 
