@@ -261,6 +261,18 @@ class TestFindUrls(unittest.TestCase):
     def test_no_urls(self):
         self.assertEqual(bot.find_urls("nothing here"), [])
 
+    def test_keeps_balanced_brackets(self):
+        wiki = "https://en.wikipedia.org/wiki/Houdini_(software)"
+        self.assertEqual(bot.find_urls(f"read {wiki}"), [wiki])
+        self.assertEqual(bot.find_urls(f"read {wiki}."), [wiki])
+        self.assertEqual(bot.find_urls(f"read {wiki}, ok?"), [wiki])
+
+    def test_drops_unbalanced_closing_bracket(self):
+        self.assertEqual(bot.find_urls("(see https://a.com/x)"), ["https://a.com/x"])
+        self.assertEqual(bot.find_urls("(see https://en.wikipedia.org/wiki/A_(b))"),
+                         ["https://en.wikipedia.org/wiki/A_(b)"])
+        self.assertEqual(bot.find_urls("[https://a.com/y]."), ["https://a.com/y"])
+
 
 class TestSanitizeOutput(unittest.TestCase):
     def test_strips_everyone_and_here(self):

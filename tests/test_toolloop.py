@@ -335,7 +335,7 @@ class TestReplyWiring(unittest.IsolatedAsyncioTestCase):
                 return [{"id": 1, "role": "user", "content": "hi", "author_id": "5",
                          "name": "Ann", "message": message}]
 
-            async def gather_data(inner, message):
+            async def gather_data(inner, message, **kwargs):
                 return "", []
 
             async def ask_model(inner, system, turns, max_tokens):

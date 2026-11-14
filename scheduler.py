@@ -92,6 +92,12 @@ def env(name, default=""):
     return os.environ.get(name, default).strip()
 
 
+def owner_user_id():
+    """The owner's Discord id from ``OWNER_USER_ID``, or None (then warnings only get logged)."""
+    raw = env("OWNER_USER_ID")
+    return raw if re.fullmatch(r"[0-9]+", raw) else None
+
+
 # ---------------------------------------------------------------- per-guild schedule
 
 
@@ -176,6 +182,17 @@ class RunState:
         if state["date"] != date:
             state["date"], state["done"] = date, set()
         state["done"].add(name)
+        self._save(guild_id, state)
+
+    def unmark(self, guild_id, date, name):
+        """Forget ``name`` for ``date``: the job ran but was not actually sent."""
+        state = self._load(guild_id)
+        if state["date"] != date or name not in state["done"]:
+            return
+        state["done"].discard(name)
+        self._save(guild_id, state)
+
+    def _save(self, guild_id, state):
         path = self._path(guild_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
@@ -316,6 +333,36 @@ class Discord:
                                      json={"content": chunk, "allowed_mentions": mentions})
             r.raise_for_status()
 
+    async def channel_guild(self, channel_id):
+        """The guild id that owns ``channel_id``, or None (DM, missing, or no access).
+
+        Used to spot a configured channel that points at another server: a channel id
+        copied around during a migration keeps working, but in the wrong guild.
+        """
+        try:
+            r = await self.get(f"/channels/{channel_id}")
+        except Exception as e:  # network trouble: treat as unknown, never post on a guess
+            log(f"channel {channel_id}: lookup failed: {type(e).__name__}: {e}")
+            return None
+        if r.status_code != 200:
+            return None
+        try:
+            data = r.json()
+        except ValueError:
+            return None
+        guild_id = data.get("guild_id") if isinstance(data, dict) else None
+        return str(guild_id) if guild_id else None
+
+    async def dm_user(self, user_id, text):
+        """Send ``text`` as a DM: open the DM channel first. Failures are logged, not raised."""
+        try:
+            r = await self.http.post("/users/@me/channels", json={"recipient_id": str(user_id)})
+            r.raise_for_status()
+            channel_id = str(r.json()["id"])
+            await self.post_message(channel_id, text)
+        except Exception as e:  # a failed warning must never sink the scheduler
+            log(f"could not DM user {user_id}: {type(e).__name__}: {e}")
+
     async def human_messages(self, guild_id, since, skip_channels=()):
         """Human messages since ``since`` in every readable text channel of the guild.
 
@@ -410,6 +457,10 @@ class Jobs:
         self.personas_dir = self.data_dir / "shared" / "personas"
         self.state = RunState(self.guilds_dir)
         self.log = log_fn or log
+        # Per-process memory: one owner DM per (guild, feature, channel), and one attempt
+        # per (guild, date, job) -- see safe_post() and tick().
+        self._warned = set()
+        self._attempted = set()
 
     # -- guild files -------------------------------------------------------- #
 
@@ -439,32 +490,76 @@ class Jobs:
         self.store.maybe_reload()
         now = now or self.now()
         date = now.strftime("%Y-%m-%d")
+        self._attempted = {k for k in self._attempted if k[1] == date}
         ran = []
         for guild_id, cfg in sorted(self.store.configs.items()):
             for name, at in schedule_for(cfg):
                 if not due(now, at):
                     continue
-                if self.state.ran(guild_id, date, name):
+                if self.state.ran(guild_id, date, name) or (guild_id, date, name) in self._attempted:
                     continue
+                self._attempted.add((guild_id, date, name))
                 self.state.mark(guild_id, date, name)
                 self.log(f"guild {guild_id} ({cfg.name}): running {name}")
-                await self.run(name, guild_id, cfg)
+                if await self.run(name, guild_id, cfg) is False:
+                    # It ran, but withheld its post (wrong guild's channel): the day is not
+                    # "sent". Not retried either -- _attempted keeps this process to one try.
+                    self.state.unmark(guild_id, date, name)
                 ran.append((guild_id, name))
         return ran
 
     async def run(self, name, guild_id, cfg):
+        """Run one job; False when it ran but deliberately did not post."""
         guild_id = str(guild_id)
         try:
             if name == "recap":
-                await self.recap(guild_id, cfg)
+                return await self.recap(guild_id, cfg)
             elif name in ("prefetch", "refetch"):
                 await self.prefetch(guild_id, cfg, retry_only=(name == "refetch"))
             elif name == "topics":
-                await self.topics(guild_id, cfg)
+                return await self.topics(guild_id, cfg)
             elif name == "news":
-                await self.news(guild_id, cfg)
+                return await self.news(guild_id, cfg)
         except Exception as e:  # keep the loop alive; never print secrets
             self.log(f"guild {guild_id}: {name} failed: {type(e).__name__}: {e}")
+
+    # -- posting ------------------------------------------------------------ #
+
+    async def safe_post(self, guild_id, channel_id, text, feature):
+        """Post ``text`` to ``channel_id`` only if that channel really is in ``guild_id``.
+
+        A channel id carried over during a migration keeps accepting posts, but it can point
+        at another server's channel; this guild's recap/topics/news would land there. Returns
+        True when the message went out, False when it was withheld (logged, owner DMed once).
+        """
+        guild_id, channel_id = str(guild_id), str(channel_id)
+        belongs = await self.discord.channel_guild(channel_id)
+        if belongs == guild_id:
+            await self.discord.post_message(channel_id, text)
+            return True
+        self.log(f"guild {guild_id}: {feature} channel {channel_id} is not in this guild "
+                 f"(belongs to {belongs or 'unknown'}), not posting")
+        await self.warn_owner(guild_id, channel_id, feature, belongs)
+        return False
+
+    async def warn_owner(self, guild_id, channel_id, feature, belongs):
+        """DM the owner about a channel in the wrong server, once per process per channel."""
+        key = (str(guild_id), feature, str(channel_id))
+        if key in self._warned:
+            return
+        self._warned.add(key)
+        owner = owner_user_id()
+        if owner is None:
+            return  # nobody to tell: the log line above is all we can do
+        cfg = self.store.get(guild_id)
+        name = getattr(cfg, "name", "") or "this server"
+        reason = (f"that channel belongs to guild {belongs}, not to this server" if belongs
+                  else "I could not look that channel up (it may be gone, or I cannot read it)")
+        await self.discord.dm_user(owner, (
+            f"Heads up: the {feature} channel for the server \"{name}\" (guild ID {guild_id}) is "
+            f"set to channel {channel_id}, but {reason}. I did not post anything there. Open "
+            f"/setup in \"{name}\" and pick the {feature} channel again."
+        ))
 
     # -- recap -------------------------------------------------------------- #
 
@@ -519,8 +614,9 @@ class Jobs:
         if self.dry_run:
             self.log(f"--- recap guild {guild_id} (dry run, not posted/saved) ---\n{text}")
             return
+        if not await self.safe_post(guild_id, settings.channel, text, "recap"):
+            return False  # withheld: save no recap, touch no profile, record nothing
         memory.ensure()
-        await self.discord.post_message(str(settings.channel), text)
         self.log(f"guild {guild_id}: posted recap ({len(text)} chars)")
         memory.save_recap(date, text)
         if today is not None:
@@ -663,7 +759,8 @@ class Jobs:
         if self.dry_run:
             self.log(f"--- topics guild {guild_id} (dry run, not posted) ---\n{text}")
             return
-        await self.discord.post_message(str(settings.channel), text)
+        if not await self.safe_post(guild_id, settings.channel, text, "topics"):
+            return False  # withheld: keep the material so a rerun can reuse it
         self.log(f"guild {guild_id}: posted topics ({len(text)} chars)")
         self.clear_material(guild_id)
 
@@ -877,7 +974,8 @@ class Jobs:
                      + "\n\n".join(messages))
             return
         for text in messages:
-            await self.discord.post_message(str(settings.channel), text)
+            if not await self.safe_post(guild_id, settings.channel, text, "news"):
+                return False  # withheld: no digest, no news-seen ids, no state record
         write_text_atomic(self.digest_path(date, guild_id), digest)
         seen.update({str(i["id"]): date for i in picked})
         self.save_seen(guild_id, seen)

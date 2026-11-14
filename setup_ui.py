@@ -426,9 +426,8 @@ def apply_form(
 ) -> g.GuildConfig:
     """Merge the form into ``base`` (keeping fields the menu doesn't show) and validate.
 
-    Raises ``guildcfg.ConfigError`` on bad values. A guild that is downgraded to
-    public gets ``tools`` switched off: the level ceiling would ignore it anyway,
-    and the saved file should not claim otherwise.
+    Raises ``guildcfg.ConfigError`` on bad values. ``tools`` follows ``trust``:
+    on for owner servers, off for public ones (there is no separate switch).
 
     Only the owner may change ``trust`` and ``admins``. The menu greys those out for
     admins, but the values are forced back here too, so hiding the controls is not
@@ -478,8 +477,9 @@ def apply_form(
     news["time"] = form.news_time
     news["items"] = int(form.news_items)
 
-    if not tools_available(data["trust"]):
-        data["features"]["tools"]["on"] = False
+    # Tools follow the trust level: the menu has no switch of its own, it only shows
+    # "available" for owner servers, so the saved file must match what it shows.
+    data["features"]["tools"]["on"] = tools_available(data["trust"])
 
     return g.parse_config(data)
 

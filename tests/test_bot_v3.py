@@ -373,6 +373,14 @@ class TestSetupForm(unittest.TestCase):
         form = setup_ui.form_from_config(self._base())
         self.assertTrue(setup_ui.apply_form(self._base(), form).features.tools.on)
 
+    def test_upgrade_to_owner_turns_tools_on(self):
+        # the menu has no tools switch: moving a guild to owner must switch tools on
+        base = self._base().model_copy(update={"trust": g.Trust.PUBLIC})
+        base.features.tools.on = False
+        form = setup_ui.form_from_config(base)
+        form.trust = "owner"
+        self.assertTrue(setup_ui.apply_form(base, form, is_owner=True).features.tools.on)
+
     def test_bad_time_is_reported(self):
         base = self._base()
         form = setup_ui.form_from_config(base)

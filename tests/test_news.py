@@ -41,10 +41,22 @@ def make_item(n, score=5.0, title_en=None, title_zh=None, summary_en=None, summa
 
 
 class FakeDiscord:
-    """Records posts; strips mass mentions exactly like the real post_message does."""
+    """Records posts; strips mass mentions exactly like the real post_message does.
 
-    def __init__(self):
+    ``channel_guild`` says the configured channel is this guild's; the channel-guild guard
+    has its own tests (test_scheduler_v3.TestPostingGuard).
+    """
+
+    def __init__(self, channel_guild=GUILD_A):
         self.posts = []
+        self.dms = []
+        self.channel_guild_answer = channel_guild
+
+    async def channel_guild(self, channel_id):
+        return self.channel_guild_answer
+
+    async def dm_user(self, user_id, text):
+        self.dms.append((str(user_id), text))
 
     async def post_message(self, channel_id, text, allow_users=False):
         self.posts.append((str(channel_id), scheduler.strip_mass_mentions(text)))

@@ -134,6 +134,13 @@ function Set-EnvKey([string]$Key, [string]$Value) {
 
 `egress/allowlist.txt` 只管 bot 和 scheduler（fetcher 本来就能上公网）。先问 Kurt，再改，然后 `docker compose up -d --build egress`，看 egress 日志确认。不要改 `squid.conf` 里的私网拒绝和 CONNECT 443 规则。
 
+## 加群 / 迁移数据
+
+- 每个群的数据在 `data/guilds/<群ID>/`。迁移（`migrate_v3.py --guild-id`）或手动复制前，先确认数据原来是**哪个群**的，填对群 ID。2026-11-14 填错过一次，FX 的记忆进了頭腦警察，详见 `docs/notes/2026-11-14-cross-guild.md`。
+- 配置里的频道 ID（`quiet_channels`、recap/topics/news 的 `channel`）必须是本群的。核对方法：`docker exec -w /opt/app discord-deepseek-bot-scheduler python -c "import asyncio,scheduler as s;print(asyncio.run(s.Discord().channel_guild('<频道ID>')))"`，输出要等于群 ID。
+- scheduler 发帖前会自己查一次。频道不属于本群就不发，并私信 Kurt（每个进程同一频道只私信一次）。日志里会出现 `... is not in this guild ..., not posting`。
+- 频道尽量让 Kurt 在 `/setup` 里选，下拉框只列本群的频道。
+
 ## 单元测试
 
 ```powershell

@@ -9,15 +9,31 @@ updated: 2026-11-14
 
 结论：**v3.0（多群配置）代码完成，在分支 `v3`，测试栈在 `#bot-test` 跑着，等 Kurt 验收**。正式 bot（TiredFX Guy）仍是 v2，没动过。v3.1 工具容器、v3.2 新闻素材都已做完并单独测通，还没接进 bot。
 
+> **2026-11-14 晚的跨群事故已经处理完**，详见 [docs/notes/2026-11-14-cross-guild.md](docs/notes/2026-11-14-cross-guild.md)。
+> - FX 的记忆已挪回 `1537280083830775820/`。頭腦警察从空白开始，频道已清空，等 Kurt 用 `/setup` 选频道。
+> - scheduler 发帖前会检查频道属于哪个群（已上线）。
+> - 测试 bot 已退役（踢出群、容器 stop 不删）。
+> - `HorizonNewsMaterial` 改写到 `data\shared\news`。
+> - 同日又上线两项：
+>   - v3.4：回复和插话也读链接。
+>   - `/setup` 保存时，tools 跟着信任等级走：owner 开、public 关，界面上没有单独开关。
+> - FX NEVER SLEEPS 已被 Kurt 改成 owner，tools 已开（备份在 `config.yaml.bak-20261114-tools`）。Kurt 在测试，暂时维持现状。
+> - 待定设计：tools 只跟信任等级走（A），还是在 `/setup` 加一个可见的 tools 开关、改成 owner 时默认打开（B，我推荐）。
+> - 私有仓库（如 kdownloader）的链接 bot 读不了，会是 404，这是正常的。
+> - v3.5（2026-11-14）：`find_urls()` 保留成对的括号，维基这类 `..._(software)` 链接能读了；已上线、已推送 `main`。
+> - 2026-11-14 实测 public 群默认配置：能聊天、能读贴来的链接（默认开、任何域名），没有模型工具（配置里强开也被信任等级挡住）。探针脚本做法：脚本经 stdin 喂给 `docker exec -i discord-deepseek-bot python -`，代码在 `/opt/app`。
+> - 搜索 API：Kurt 在比较 Tavily / Exa / Serper / Brave，还没定；定了以后只换 `tools/server.py` 的 `do_search()`，按 Tavily → Serper → SearXNG 降级，额度用完私信 owner。
+> - fetcher 日志：Reddit RSS 一直 429，Show HN 偶尔超时/SSL 错，话题素材 Reddit 部分基本为空，Kurt 说先不急。
+
 设计全文：[docs/notes/design-v3.md](docs/notes/design-v3.md)。计划（grill 结果）：`C:\Users\suzyz\.claude\plans\lazy-inventing-globe.md`。v2 时期的交接内容见 git 历史。
 
 ## 现在在跑什么
 
 | 东西 | 状态 |
 |---|---|
-| 正式栈 `discord-deepseek-bot*`（4 个容器） | v2，镜像 `discord-deepseek-bot:local`（= `:v2.2` 标签），**不要动** |
-| 测试栈 `-p ddb-staging`（`docker-compose.staging.yml`） | v3 代码，镜像 `:v3dev`，bot = Kurt News 应用（显示名 `news-turtle#8647`），`env_file: .env.staging`，数据 `data-staging\`，只在 `#bot-test`（`1570775686862471301`）说话 |
-| 任务计划程序 `HorizonNewsMaterial` | 每天 07:30 跑 `news-pipeline\horizon_material.py`，写 `data-staging\shared\news\material-*.json`（正式上线时改成 `data\`） |
+| 正式栈 `discord-deepseek-bot*`（6 个容器） | v3，镜像 `discord-deepseek-bot:local`（2026-11-14 重建，含频道归属检查）；回滚用 `:v3.0`、`:v2.2` |
+| 测试栈 `-p ddb-staging`（`docker-compose.staging.yml`） | **已 stop（2026-11-14，退役，不删）**；原来是 v3 代码，镜像 `:v3dev`，bot = Kurt News 应用（显示名 `news-turtle#8647`），`env_file: .env.staging`，数据 `data-staging\`，只在 `#bot-test`（`1570775686862471301`）说话 |
+| 任务计划程序 `HorizonNewsMaterial` | 每天 07:30 跑 `news-pipeline\horizon_material.py`，写 `data\shared\news\material-*.json`（2026-11-14 从 data-staging 改过来） |
 | news-pipeline 的乌龟 `bot.py` | 已停，代码保留到 v3.2 后退役 |
 
 - 头脑警察群 ID `1317847113559965736`；配置 `data-staging\guilds\1317847113559965736\config.yaml`（tiredfx、owner、回复 100/每人 30、查询 60/每人 20）。
