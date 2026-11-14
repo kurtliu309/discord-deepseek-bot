@@ -75,7 +75,6 @@ class TestMigration(MigrationCase):
         self.assertTrue(result["config_written"])
         cfg = self.config()
         self.assertEqual(cfg.name, GUILD_NAME)
-        self.assertEqual(cfg.trust, guildcfg.Trust.OWNER)
         self.assertTrue(cfg.consent)
         self.assertEqual(cfg.persona, "tiredfx")
         self.assertEqual(cfg.style, "normal")
@@ -132,7 +131,6 @@ class TestMigration(MigrationCase):
     def test_dm_config_created(self):
         self.migrate()
         cfg = guildcfg.load_config_file(self.data / "guilds" / "dm-owner" / "config.yaml")
-        self.assertEqual(cfg.trust, guildcfg.Trust.OWNER)
         self.assertTrue(guildcfg.effective(cfg, "chat"))
 
     def test_idempotent(self):

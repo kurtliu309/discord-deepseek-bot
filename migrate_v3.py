@@ -6,7 +6,7 @@ Turns the old flat, env-configured layout into one folder per guild:
     DATA/guilds/<guild id>/config.yaml     built from the env vars below
     DATA/guilds/<guild id>/profile/*.md    split out of group-profile.md
     DATA/guilds/<guild id>/recaps/*.md     moved from DATA/recaps/
-    DATA/guilds/dm-owner/config.yaml       DMs: owner trust, chat only
+    DATA/guilds/dm-owner/config.yaml       DMs: chat and search, no interjecting
 
 ``group-profile.md`` and ``recaps/`` are renamed to ``*.v2.bak``, never deleted.
 Running it twice is safe: an existing config.yaml is left alone (``--force`` rewrites
@@ -39,7 +39,6 @@ from guildcfg import (
     InterjectSettings,
     RecapSettings,
     TopicsSettings,
-    Trust,
 )
 from guildmem import GuildMemory, READONLY_BLOCKS, block_limit, fits
 
@@ -211,7 +210,6 @@ def build_config(env, guild_name: str, only_channel=None) -> GuildConfig:
 
     return GuildConfig(
         name=guild_name,
-        trust=Trust.OWNER,
         consent=True,
         persona="tiredfx",
         style="normal",

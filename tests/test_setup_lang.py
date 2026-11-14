@@ -88,13 +88,13 @@ class TestTextTable(unittest.TestCase):
 
 class TestConfigField(unittest.TestCase):
     def test_old_config_without_field_defaults_to_zh(self):
-        self.assertEqual(g.parse_config({"name": "old", "trust": "owner"}).setup_language, "zh")
+        self.assertEqual(g.parse_config({"name": "old"}).setup_language, "zh")
         self.assertEqual(g.GuildConfig().setup_language, "zh")
 
     def test_old_yaml_file_without_field_defaults_to_zh(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.yaml"
-            path.write_text("name: old\ntrust: owner\nlanguage: en\n", encoding="utf-8")
+            path.write_text("name: old\nlanguage: en\n", encoding="utf-8")
             cfg = g.load_config_file(path)
             self.assertEqual(cfg.setup_language, "zh")
             self.assertEqual(cfg.language, "en")  # reply language is a separate field
@@ -110,7 +110,7 @@ class TestConfigField(unittest.TestCase):
 class TestLanguageToggle(unittest.IsolatedAsyncioTestCase):
     def _view(self, tmp, **cfg):
         store = g.GuildConfigStore(tmp)
-        base = g.GuildConfig(name="New server", trust=g.Trust.OWNER, **cfg)
+        base = g.GuildConfig(name="New server", **cfg)
         store.save("111", base)
         view = setup_ui.SetupView(
             guild=FakeGuild(),
@@ -234,11 +234,9 @@ class TestPermissionLanguage(unittest.IsolatedAsyncioTestCase):
         self.assertIn("owner", setup_ui.permission_error(2, 1, True, "en"))
         self.assertIn("管理服务器", setup_ui.permission_error(1, 1, False))
 
-    def test_tools_status_takes_a_language(self):
-        self.assertIn("unavailable", setup_ui.tools_status("public", "en"))
-        self.assertIn("available", setup_ui.tools_status("owner", "en"))
-        self.assertIn("不可用", setup_ui.tools_status("public"))
-        self.assertIn("可用", setup_ui.tools_status("owner"))
+    def test_search_line_takes_a_language(self):
+        self.assertIn("Web search", setup_ui.t("en", "search_line", state="on"))
+        self.assertIn("搜索", setup_ui.t("zh", "search_line", state="on"))
 
 
 class TestEnglishForm(unittest.IsolatedAsyncioTestCase):
@@ -252,7 +250,7 @@ class TestEnglishForm(unittest.IsolatedAsyncioTestCase):
             )
             content, kwargs = response.messages[0]
             self.assertIn("Server setup", content)
-            self.assertIn("Trust level:", content)
+            self.assertIn("Web search:", content)
             self.assertIsInstance(kwargs["view"], setup_ui.SetupView)
             self.assertEqual(kwargs["view"].setup_language, "en")
 

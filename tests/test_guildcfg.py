@@ -18,7 +18,7 @@ def make(**overrides):
 class TestDefaults(unittest.TestCase):
     def test_defaults(self):
         cfg = make()
-        self.assertEqual(cfg.trust, g.Trust.PUBLIC)
+        self.assertFalse(hasattr(cfg, "trust"))  # v3.7 dropped trust levels
         self.assertFalse(cfg.consent)
         self.assertEqual(cfg.persona, "tiredfx")
         self.assertEqual(cfg.style, "normal")
@@ -37,8 +37,8 @@ class TestDefaults(unittest.TestCase):
         self.assertEqual(cfg.features.interject.burst_count, 12)
         self.assertEqual(cfg.features.interject.burst_window, 180)
         self.assertEqual(cfg.features.interject.cooldown, 600)
-        self.assertTrue(cfg.features.read_links.on)
-        self.assertFalse(cfg.features.tools.on)
+        self.assertNotIn("read_links", cfg.features.model_fields)
+        self.assertFalse(cfg.features.tools.on)  # new guild: search off
         self.assertFalse(cfg.features.news.on)
         self.assertFalse(cfg.features.recap.on)
         self.assertEqual(cfg.features.recap.time, "22:00")
@@ -92,14 +92,14 @@ class TestValidation(unittest.TestCase):
                 "features": {
                     "chat": "on",
                     "interject": {"on": "off", "chance": 0.5},
-                    "read_links": False,
+                    "tools": False,
                 },
             }
         )
         self.assertTrue(cfg.features.chat.on)
         self.assertFalse(cfg.features.interject.on)
         self.assertEqual(cfg.features.interject.chance, 0.5)
-        self.assertFalse(cfg.features.read_links.on)
+        self.assertFalse(cfg.features.tools.on)
 
     def test_unknown_key_rejected(self):
         with self.assertRaises(g.ConfigError):
@@ -109,7 +109,7 @@ class TestValidation(unittest.TestCase):
 
     def test_bad_values_rejected(self):
         for bad in (
-            {"trust": "emperor"},
+            {"features": {"tools": {"on": "yesplease"}}},
             {"budget": {"reset_time": "9:99"}},
             {"features": {"recap": {"time": "25:00"}}},
             {"features": {"interject": {"chance": 1.5}}},
@@ -149,16 +149,13 @@ features:
         self.assertFalse(cfg.features.tools.on)
 
 
-class TestTrust(unittest.TestCase):
-    def test_ordered(self):
-        self.assertLess(g.Trust.PUBLIC, g.Trust.OWNER)
-        self.assertGreater(g.Trust.OWNER, g.Trust.PUBLIC)
-        self.assertGreaterEqual(g.Trust.OWNER, "public")
-        self.assertLessEqual(g.Trust("public"), "owner")
-        self.assertEqual(str(g.Trust.OWNER), "owner")
+class TestLegacyKeys(unittest.TestCase):
+    """v3.7 dropped ``trust``, ``read_links`` and ``tools.allow_domains``.
 
-    def test_design_example_parses(self):
-        text = """
+    Config files written before still carry them, and the models forbid extras.
+    """
+
+    LEGACY = """
 name: 頭腦警察
 trust: owner
 consent: true
@@ -173,25 +170,52 @@ features:
   topics: off
 quiet_channels: []
 """
-        cfg = g.parse_config(g.yaml.load(text, Loader=g._Loader))
-        self.assertEqual(cfg.trust, g.Trust.OWNER)
+
+    def test_old_config_still_loads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.yaml"
+            path.write_text(self.LEGACY, encoding="utf-8")
+            cfg = g.load_config_file(path)
+        self.assertFalse(hasattr(cfg, "trust"))
+        self.assertFalse(hasattr(cfg.features, "read_links"))
+        self.assertFalse(hasattr(cfg.features.tools, "allow_domains"))
+        self.assertTrue(cfg.features.tools.on)  # an old "on" stays on
         self.assertEqual(cfg.features.news.channel, 1570775686862471301)
         self.assertFalse(cfg.features.topics.on)
 
+    def test_saving_drops_the_old_keys(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "g" / "config.yaml"
+            cfg = g.parse_config(g.yaml.load(self.LEGACY, Loader=g._Loader))
+            g.write_config(path, cfg)
+            text = path.read_text(encoding="utf-8")
+            back = g.load_config_file(path)
+        self.assertNotIn("trust", text)
+        self.assertNotIn("read_links", text)
+        self.assertNotIn("allow_domains", text)
+        self.assertIn("tools", text)
+        self.assertTrue(back.features.tools.on)
+
+    def test_tools_on_survives_a_round_trip(self):
+        cfg = g.parse_config({"name": "x", "features": {"tools": {"on": True}}})
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.yaml"
+            g.write_config(path, cfg)
+            back = g.load_config_file(path)
+        self.assertTrue(back.features.tools.on)
+        self.assertTrue(g.effective(back, "tools"))
+
 
 class TestEffective(unittest.TestCase):
-    def test_public_cannot_turn_tools_on(self):
-        cfg = make(trust="public", features={"tools": {"on": True}})
-        self.assertTrue(cfg.features.tools.on)
-        self.assertFalse(g.effective(cfg, "tools"))
-        self.assertTrue(g.effective(cfg, "chat"))
-
-    def test_owner_gets_tools(self):
-        cfg = make(trust="owner", features={"tools": {"on": True}})
+    def test_search_switch_alone_decides(self):
+        cfg = make(features={"tools": {"on": True}})
         self.assertTrue(g.effective(cfg, "tools"))
+        self.assertTrue(g.effective(cfg, "chat"))
+        # No hidden ceiling: the switch is the only gate.
+        self.assertFalse(g.effective(make(), "tools"))
 
     def test_off_stays_off(self):
-        cfg = make(trust="owner", features={"chat": "off"})
+        cfg = make(features={"chat": "off"})
         self.assertFalse(g.effective(cfg, "chat"))
 
     def test_unconfigured_guild(self):
@@ -199,8 +223,8 @@ class TestEffective(unittest.TestCase):
             self.assertFalse(g.effective(None, name))
 
     def test_registry(self):
-        self.assertEqual(g.FEATURES["tools"].min_trust, g.Trust.OWNER)
-        self.assertEqual(g.FEATURES["chat"].min_trust, g.Trust.PUBLIC)
+        self.assertNotIn("read_links", g.FEATURES)
+        self.assertFalse(hasattr(g.FEATURES["tools"], "min_trust"))
         self.assertEqual(g.FEATURES["chat"].profile_parts, ("kurt", "people", "jokes"))
         self.assertEqual(g.FEATURES["chat"].token_budget, 500)
         self.assertEqual(g.FEATURES["interject"].profile_parts, ("kurt", "jokes"))
@@ -231,9 +255,9 @@ class TestDm(unittest.TestCase):
     def test_dm_config(self):
         cfg = g.dm_config()
         self.assertEqual(g.DM_GUILD_ID, "dm-owner")
-        self.assertEqual(cfg.trust, g.Trust.OWNER)
         self.assertTrue(g.effective(cfg, "chat"))
         self.assertFalse(g.effective(cfg, "interject"))
+        self.assertTrue(g.effective(cfg, "tools"))  # DMs: search on by default
 
 
 class TestStore(unittest.TestCase):
@@ -254,10 +278,10 @@ class TestStore(unittest.TestCase):
 
     def test_scan_and_save(self):
         self.store.save("111", make(allowed_channels=[5]))
-        self.store.save("222", make(name="two", trust="owner"))
+        self.store.save("222", make(name="two"))
         self.store.reload()
         self.assertEqual(self.store.get(111).name, "測試群")
-        self.assertEqual(self.store.get("222").trust, g.Trust.OWNER)
+        self.assertEqual(self.store.get("222").name, "two")
         self.assertEqual(self.store.get(111).allowed_channels, [5])
         self.assertEqual(set(self.store.configs), {"111", "222"})
         self.assertIsNone(self.store.get("333"))
@@ -265,7 +289,7 @@ class TestStore(unittest.TestCase):
         self.assertEqual(list((self.root / "111").glob(".*.tmp")), [])
 
     def test_invalid_config_is_unconfigured_and_logged(self):
-        self._write("111", "name: x\ntrust: emperor\n")
+        self._write("111", "name: x\npersona: ../evil\n")
         self.store.maybe_reload()
         self.assertIsNone(self.store.get("111"))
         self.assertIn("111", self.store.invalid)
@@ -275,12 +299,11 @@ class TestStore(unittest.TestCase):
         self.store.save("111", make(name="one"))
         self.assertEqual(self.store.get("111").name, "one")
         path = self.root / "111" / "config.yaml"
-        path.write_text(g.dump_config(make(name="changed", trust="owner")), encoding="utf-8")
+        path.write_text(g.dump_config(make(name="changed")), encoding="utf-8")
         old = path.stat().st_mtime_ns
         os.utime(path, ns=(old + 10 ** 9, old + 10 ** 9))
         self.assertTrue(self.store.maybe_reload())
         self.assertEqual(self.store.get("111").name, "changed")
-        self.assertEqual(self.store.get("111").trust, g.Trust.OWNER)
 
     def test_interval_throttles_disk_reads(self):
         self.store.save("111", make(name="one"))
@@ -305,7 +328,6 @@ class TestStore(unittest.TestCase):
 class TestRoundTrip(unittest.TestCase):
     def test_dump_load(self):
         cfg = make(
-            trust="owner",
             consent=True,
             allowed_channels=[1, 2],
             quiet_channels=[3],

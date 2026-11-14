@@ -107,7 +107,6 @@ class NewsCase(unittest.TestCase):
     def news_cfg(self, name="N", language="en", items=3, channel=400, on=True, time="09:00"):
         return GuildConfig(
             name=name,
-            trust="public",
             language=language,
             features={"news": {"on": on, "channel": channel, "time": time, "items": items}},
         )
@@ -162,10 +161,9 @@ class TestNewsSchedule(NewsCase):
     def test_no_channel_is_not_scheduled(self):
         self.assertEqual(scheduler.schedule_for(self.news_cfg(channel=None)), [])
 
-    def test_public_guild_may_have_news(self):
-        cfg = self.news_cfg()
-        self.assertEqual(cfg.trust, "public")
-        self.assertEqual(scheduler.schedule_for(cfg), [("news", (9, 0))])
+    def test_news_needs_no_trust_level(self):
+        # v3.7 dropped trust levels; news is scheduled from the switch alone.
+        self.assertEqual(scheduler.schedule_for(self.news_cfg()), [("news", (9, 0))])
 
     def test_tick_runs_news_at_its_own_time(self):
         discord = FakeDiscord()

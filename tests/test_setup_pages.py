@@ -66,7 +66,7 @@ def make_personas(tmp):
 
 def make_view(tmp, **cfg):
     store = g.GuildConfigStore(tmp)
-    base = g.GuildConfig(name="New server", trust=g.Trust.OWNER, **cfg)
+    base = g.GuildConfig(name="New server", **cfg)
     store.save("111", base)
     return store, setup_ui.SetupView(
         guild=FakeGuild(),
@@ -143,7 +143,7 @@ class TestPageLayout(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             _, view = make_view(tmp)
             expected = {
-                1: ["每日额度", "插话设置", "保存", "取消"],
+                1: ["搜索", "每日额度", "插话设置", "保存", "取消"],
                 2: ["回顾设置", "话题设置", "隐私确认", "保存", "取消"],
                 3: ["保存", "取消"],
             }

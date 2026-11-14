@@ -159,15 +159,16 @@ footer { padding-block: 24px 40px; border-top: 1px solid var(--line); color: var
 <div class="wrap">
   <aside class="news" aria-labelledby="news-title">
     <div class="news-head">
-      <span class="tag">v3.6</span>
+      <span class="tag">v3.7</span>
       <h2 id="news-title"><span class="en">What's new</span><span class="zh">版本更新</span></h2>
-      <time datetime="2026-11-14">2026-11-14</time>
+      <time datetime="2026-11-15">2026-11-15</time>
     </div>
     <ul>
-      <li><span class="en"><b>Each persona sets its own pace</b>: a persona can carry a <code>persona.yaml</code> with a multiplier on the jump-in chance, an extra multiplier for Houdini/FX talk, a multiplier on the cooldown, a multiplier on the burst threshold and a typing speed. The chance multiplier and the FX multiplier now work independently — setting only one of them is enough. tiredfx stays the baseline; turtle jumps in less, needs a busier channel to be pulled in by a burst, stays quiet longer and types slower. Missing, broken or out-of-range numbers fall back to safe defaults, and no persona can push the jump-in chance above 100%. There is no separate server-level FX chance any more: FX talk is boosted only by the persona's FX multiplier, and a persona without one gets no FX bonus. Old config files with the removed key still load — it is ignored. <code>/rule</code> now shows the numbers that actually apply.</span><span class="zh"><b>人设有自己的节奏</b>：每个人设可以带一份 <code>persona.yaml</code>，设插话概率倍数、Houdini/FX 话题再加的倍数、冷却倍数、刷屏阈值倍数和打字速度。概率倍数和 FX 倍数现在各自独立——只写其中一个也生效。tiredfx 还是基准；乌龟插话更少、要更热闹才会被刷屏拉出来、冷却更久、打字更慢。数值缺失、写坏或超范围都会回退到安全的默认值，任何人设也不能把插话概率抬过 100%。服务器配置里不再有单独的 FX 话题概率了：FX 话题只靠人设的 FX 倍数加成，没写的人设没有加成。旧配置文件里残留的这个键仍然能正常加载，会被忽略。<code>/rule</code> 显示的是实际生效的数字。</span></li>
+      <li><span class="en">Web search now uses DeepSeek's built-in search, so results are much better. The separate tools and SearXNG containers are gone; reading pages and video subtitles moved into the fetcher. Trust levels and the "read links" switch are removed — links are always read. A single "Web search" switch in <code>/setup</code> can be turned on or off by the owner and server admins.</span><span class="zh">搜索改用 DeepSeek 自带的搜索，结果好多了。单独的 tools 和 SearXNG 容器已经删掉；读网页、读视频字幕并进了 fetcher。信任等级和“读链接”开关删掉了——链接一直都会读。<code>/setup</code> 里只剩一个“搜索”开关，owner 和群管理员都能开关。</span></li>
     </ul>
     <details>
       <summary><span class="en">Earlier versions</span><span class="zh">更早的版本</span></summary>
+      <p><b>v3.6 · 2026-11-14</b> — <span class="en">Personas set their own pace: a <code>persona.yaml</code> can carry multipliers on the jump-in chance, Houdini/FX talk, the cooldown and the burst threshold, plus a typing speed. tiredfx stays the baseline and turtle is quieter and slower.</span><span class="zh">人设有了自己的节奏：<code>persona.yaml</code> 可以设插话概率、Houdini/FX 话题、冷却和刷屏阈值的倍数，以及打字速度。tiredfx 还是基准，乌龟更安静也更慢。</span></p>
       <p><b>v3.5 · 2026-11-14</b> — <span class="en">Links with brackets work: Wikipedia-style links such as <code>…/wiki/Houdini_(software)</code> are read properly now; a bracket that only wraps a link, like <code>(see https://example.com)</code>, is still left out.</span><span class="zh">带括号的链接能读了：像 <code>…/wiki/Houdini_(software)</code> 这样的维基链接现在能正常读；只是把链接括起来的括号，比如 <code>(see https://example.com)</code>，照旧不算进链接。</span></p>
       <p><b>v3.4 · 2026-11-14</b> — <span class="en">It also reads the links and files in the message you reply to (one level up), and jump-ins read the links in that message too (silently skipping what it can't read).</span><span class="zh">回复某条消息时，那条消息里的链接和附件也会读（只往上一层）；主动插话也读那条消息里的链接，读不到就不吭声。</span></p>
       <p><b>v3.3 · 2026-11-14</b> — <span class="en">Easier <code>/setup</code> pages (Page 1 / Page 2 / Page 3 buttons and the language switch at the bottom of every page); daily news can now be set in <code>/setup</code>.</span><span class="zh"><code>/setup</code> 翻页更直接（每页底部都有「第 1 / 2 / 3 页」和中英切换）；新闻也能在 <code>/setup</code> 里设。</span></p>
@@ -223,7 +224,7 @@ footer { padding-block: 24px 40px; border-top: 1px solid var(--line); color: var
         <ul>
           <li><span class="en">Each server has <b>two daily budgets</b>: replies and tool lookups. Each one has a server total and a limit for every person; whichever runs out first stops it.</span><span class="zh">每个群有<b>两套每日额度</b>：回复和工具查询。每套都有“全群总数”和“每人上限”，哪个先到都会拦住。</span></li>
           <li><span class="en"><b>Replies</b>: 50 a day for the server and 30 per person by default. Mention replies, jump-ins, <code>/dev</code> and file/link replies all count.</span><span class="zh"><b>回复</b>：默认每群每天 50 条、每人 30 条。@ 回复、主动插话、<code>/dev</code>、读文件和链接的回复都算。</span></li>
-          <li><span class="en"><b>Lookups</b>: one per tool call, and only when tools are on. A server with tools on sets its own total and a per-person limit (20 by default); one question stops after 4 calls or about 40,000 characters.</span><span class="zh"><b>查询</b>：每次工具调用扣 1，只有开了工具才有用。开了工具的群自己设全群总数和每人上限（默认 20）；一次提问最多 4 次调用或约 4 万字。</span></li>
+          <li><span class="en"><b>Lookups</b>: one per tool call. Reading a page or a video's subtitles uses one; search uses one too and only works when the server's <b>Web search</b> switch is on. A server sets its own total and a per-person limit (20 by default); one question stops after 4 calls or about 40,000 characters.</span><span class="zh"><b>查询</b>：每次工具调用扣 1。读网页或读视频字幕扣 1；搜索也扣 1，只有群里的 <b>搜索</b> 开关打开才可用。每个群自己设全群总数和每人上限（默认 20）；一次提问最多 4 次调用或约 4 万字。</span></li>
           <li><span class="en">Refills every morning at the server's reset time, <b>09:00 Adelaide time</b> by default.</span><span class="zh">每天在群设定的时间恢复，默认是早上 <b>09:00（阿德莱德时间）</b>。</span></li>
           <li><span class="en">When the server total runs dry, the next person who mentions it gets one "out of juice" message, then silence until the refill; when one person runs dry, only that person is told. Kurt gets a private message either way.</span><span class="zh">全群额度用完后，下一个 @ 它的人会收到一句“没电了”，之后它就安静到恢复为止；只是某人自己的额度用完时，只告诉这个人。两种情况都会私信 Kurt 一次。</span></li>
           <li><span class="en">Kurt's messages, his own tool calls and <code>/rule</code> don't use the budget. Kurt and the server's admins can refill early with <code>/feed</code>; <code>/feed @someone</code> refills just that person.</span><span class="zh">Kurt 的消息、他自己的工具调用和 <code>/rule</code> 不扣额度。Kurt 和该群的管理员可以用 <code>/feed</code> 提前补满；<code>/feed @某人</code> 只补这个人。</span></li>
@@ -236,24 +237,24 @@ footer { padding-block: 24px 40px; border-top: 1px solid var(--line); color: var
           <div class="cmd"><code>/rule</code><span><span class="en">Shows a short card of how it works and how much budget is left. Only you see it.</span><span class="zh">显示一张简短的规则卡和剩余余额，只有你自己看得到。</span></span></div>
           <div class="cmd"><code>/rule &lt;question&gt;</code><span><span class="en">Ask how it works, e.g. <code>/rule why did you jump in?</code> It drops the persona and answers plainly.</span><span class="zh">问它的机制，比如 <code>/rule why did you jump in?</code>，它会放下人设正常回答。</span></span></div>
           <div class="cmd"><code>/dev [question]</code><span><span class="en">Developer mode: same as <code>/rule</code>, but the card or answer is posted for the whole channel to read. Costs 1 reply from the budget (free for Kurt). Not available in quiet channels.</span><span class="zh">开发模式：和 <code>/rule</code> 一样，但规则卡或回答会公开发在频道里，所有人都能看。扣 1 条回复额度（Kurt 不扣）。安静频道里不能用。</span></span></div>
-          <div class="cmd"><code>/setup</code><span><span class="en">Owner and the server's admins: private menus to set the server up (trust level, persona, style, language, budgets, jump-ins, quiet channels, recap/topics, consent, blocked people, admins). A button switches the menus between Chinese and English; saving with changes sends the owner a list of just what changed. Only the owner can change the trust level or the admin list.</span><span class="zh">owner 和该群管理员：用仅自己可见的菜单配置这个群（信任等级、人设、风格、语言、额度、插话、安静频道、总结/话题、隐私确认、黑名单、管理员）。有个按钮切换中英文界面；保存时如果有改动，会私信 owner 一份只列改动的清单。信任等级和管理员名单只有 owner 能改。</span></span></div>
+          <div class="cmd"><code>/setup</code><span><span class="en">Owner and the server's admins: private menus to set the server up (persona, style, language, the Web search switch, budgets, jump-ins, quiet channels, recap/topics, consent, blocked people, admins). A button switches the menus between Chinese and English; saving with changes sends the owner a list of just what changed. Only the owner can change the admin list.</span><span class="zh">owner 和该群管理员：用仅自己可见的菜单配置这个群（人设、风格、语言、搜索开关、额度、插话、安静频道、总结/话题、隐私确认、黑名单、管理员）。有个按钮切换中英文界面；保存时如果有改动，会私信 owner 一份只列改动的清单。管理员名单只有 owner 能改。</span></span></div>
           <div class="cmd"><code>/feed</code><span><span class="en">Owner and server admins: refills this server's budgets. <code>/feed @someone</code> refills only that person's limits.</span><span class="zh">owner 和该群管理员：补满这个群的额度。<code>/feed @某人</code> 只补这个人的额度。</span></span></div>
         </div>
       </section>
 
       <section>
-        <h2><span class="en">Servers and trust levels</span><span class="zh">群和信任等级</span></h2>
+        <h2><span class="en">Servers and admins</span><span class="zh">群和管理员</span></h2>
         <ul>
-          <li><span class="en">Every server has a trust level: <b>owner</b> (Kurt's own servers, only people he trusts) or <b>public</b> (strangers are in it). The level is a ceiling: a feature that needs owner does nothing in a public server even if its config says on.</span><span class="zh">每个群有一个信任等级：<b>owner</b>（Kurt 自己的群，只有他信得过的人）或 <b>public</b>（有外人）。等级是天花板：需要 owner 的功能，在 public 群里配置写了开也不生效。</span></li>
-          <li><span class="en">The one difference today is <b>tools</b>: owner servers can switch them on (web search, reading a page, reading a video's public subtitles). Public servers never get tools.</span><span class="zh">目前唯一的区别是 <b>tools</b>：owner 群可以打开（网页搜索、读网页、读视频的公开字幕）。public 群永远没有工具。</span></li>
-          <li><span class="en">Each server also has its own admins (who can run <code>/setup</code> and <code>/feed</code>) and blocked people. Only the owner can change the trust level or the admin list.</span><span class="zh">每个群还有自己的管理员（能用 <code>/setup</code> 和 <code>/feed</code>）和黑名单。信任等级和管理员名单只有 owner 能改。</span></li>
+          <li><span class="en">Every server is set up with <code>/setup</code>; there are no trust levels any more. The owner and each server's admins can run the menus, and only the owner can change the admin list.</span><span class="zh">每个群都用 <code>/setup</code> 配置；不再有信任等级。owner 和该群管理员都能打开菜单，只有 owner 能改管理员名单。</span></li>
+          <li><span class="en">The one model switch is <b>Web search</b>: the owner and the server's admins can turn it on or off. Reading pages and video subtitles is always available.</span><span class="zh">唯一的模型开关是 <b>搜索</b>：owner 和该群管理员都能开关。读网页和读视频字幕一直可用。</span></li>
+          <li><span class="en">Each server also has its own admins (who can run <code>/setup</code> and <code>/feed</code>) and blocked people.</span><span class="zh">每个群还有自己的管理员（能用 <code>/setup</code> 和 <code>/feed</code>）和黑名单。</span></li>
         </ul>
-        <p><span class="en">With tools on, it may search the web, open one page and read a video's public subtitles while answering a mention. It can't write files, run commands or touch anyone's computer. One question stops after 4 tool calls or about 40,000 characters, and everything the tools return is treated as untrusted data.</span><span class="zh">开了工具后，它回答 @ 时可以搜网页、打开一个网页、读视频的公开字幕。它不能写文件、跑命令，也碰不到任何人的电脑。一次提问最多 4 次工具调用或约 4 万字，工具拿回来的内容一律当作不可信数据。</span></p>
+        <p><span class="en">It may read a page and a video's public subtitles while answering a mention, and search the web when the server switched Web search on. It can't write files, run commands or touch anyone's computer. One question stops after 4 tool calls or about 40,000 characters, and everything the tools return is treated as untrusted data.</span><span class="zh">它回答 @ 时可以读网页、读视频的公开字幕；群里开了搜索时还能搜网页。它不能写文件、跑命令，也碰不到任何人的电脑。一次提问最多 4 次工具调用或约 4 万字，工具拿回来的内容一律当作不可信数据。</span></p>
       </section>
 
       <section>
         <h2><span class="en">Files, links and docs</span><span class="zh">文件、链接和文档</span></h2>
-        <p><span class="en">Attach a file or paste a link in the message where you mention it. A server can switch this off; then it ignores attachments and links.</span><span class="zh">在 @ 它的那条消息里附上文件或贴上链接就行。某个群可以关掉这个功能，关掉后它不读附件和链接。</span></p>
+        <p><span class="en">Attach a file or paste a link in the message where you mention it. Links are always read; there is no switch to turn this off any more.</span><span class="zh">在 @ 它的那条消息里附上文件或贴上链接就行。链接一直都会读，不再有开关能关掉。</span></p>
         <div class="table-scroll">
           <table>
             <thead><tr><th><span class="en">Type</span><span class="zh">类型</span></th><th><span class="en">Examples</span><span class="zh">例子</span></th><th></th></tr></thead>
@@ -327,15 +328,13 @@ docker compose up -d --build</pre>
               <tbody>
                 <tr><td class="mono">bot.py</td><td><span class="en">Discord bot: replies, jump-ins, budgets, /rule, /feed, /setup, files, docs, the tool loop</span><span class="zh">Discord bot：回复、插话、额度、/rule、/feed、/setup、文件、文档和工具循环</span></td></tr>
                 <tr><td class="mono">scheduler.py</td><td><span class="en">Nightly recap, morning topics, daily news, group profile</span><span class="zh">每晚总结、早上话题、每日新闻、群档案</span></td></tr>
-                <tr><td class="mono">fetcher.py</td><td><span class="en">Key-less fetcher: web pages, RSS, file parsing</span><span class="zh">无密钥抓取器：网页、RSS、文件解析</span></td></tr>
-                <tr><td class="mono">guildcfg.py</td><td><span class="en">Per-server config, trust levels and per-feature switches</span><span class="zh">按群配置、信任等级和功能开关</span></td></tr>
+                <tr><td class="mono">fetcher.py</td><td><span class="en">Key-less fetcher: web pages, RSS, video subtitles, file parsing</span><span class="zh">无密钥抓取器：网页、RSS、视频字幕、文件解析</span></td></tr>
+                <tr><td class="mono">guildcfg.py</td><td><span class="en">Per-server config and per-feature switches</span><span class="zh">按群配置和功能开关</span></td></tr>
                 <tr><td class="mono">setup_ui.py</td><td><span class="en"><code>/setup</code>: the private setup menus and the change list</span><span class="zh"><code>/setup</code>：仅自己可见的配置菜单和改动清单</span></td></tr>
-                <tr><td class="mono">toolloop.py</td><td><span class="en">The capped tool loop: schemas, MCP client, quotas</span><span class="zh">有上限的工具循环：工具定义、MCP 客户端、额度</span></td></tr>
+                <tr><td class="mono">toolloop.py</td><td><span class="en">The capped tool loop: tool schemas, quotas, the search bridge</span><span class="zh">有上限的工具循环：工具定义、额度、搜索桥接</span></td></tr>
                 <tr><td class="mono">persona.py</td><td><span class="en">Builds the persona from the shared library</span><span class="zh">从人设库拼出人设</span></td></tr>
-                <tr><td class="mono">tools/</td><td><span class="en">Key-less MCP server: search, read a page, read a video's subtitles</span><span class="zh">无密钥 MCP 服务：搜索、读网页、读视频字幕</span></td></tr>
-                <tr><td class="mono">searxng/</td><td><span class="en">Settings for the key-less search server</span><span class="zh">无密钥搜索服务的设置</span></td></tr>
                 <tr><td class="mono">egress/</td><td><span class="en">Squid proxy: per-container allow rules</span><span class="zh">Squid 代理：按容器区分的放行规则</span></td></tr>
-                <tr><td class="mono">docker-compose.yml</td><td><span class="en">Six containers, two networks, all hardening</span><span class="zh">六个容器、两张网络和全部加固设置</span></td></tr>
+                <tr><td class="mono">docker-compose.yml</td><td><span class="en">Four containers, two networks, all hardening</span><span class="zh">四个容器、两张网络和全部加固设置</span></td></tr>
                 <tr><td class="mono">data/shared/personas/</td><td><span class="en">Persona library: shared floor, characters and typing styles</span><span class="zh">人设库：公共底线、角色和打字风格</span></td></tr>
                 <tr><td class="mono">prompts/about.md</td><td><span class="en">Full reference the bot reads to answer <code>/rule</code> questions</span><span class="zh">完整说明，bot 回答 <code>/rule</code> 问题时读它</span></td></tr>
                 <tr><td class="mono">tests/</td><td><span class="en">Unit tests for budgets, triggers, config, persona and parsing</span><span class="zh">额度、触发、配置、人设和解析的单元测试</span></td></tr>
@@ -353,7 +352,7 @@ docker compose up -d --build</pre>
               <tr><th><span class="en">Runtime</span><span class="zh">运行环境</span></th><td><span class="en">Docker Desktop (WSL 2) on a Windows PC that stays on</span><span class="zh">一台常开的 Windows 电脑上的 Docker Desktop（WSL 2）</span></td></tr>
               <tr><th><span class="en">Language</span><span class="zh">语言</span></th><td>Python 3.13, <code>python:3.13-slim</code></td></tr>
               <tr><th>Discord</th><td><code>discord.py</code> 2.7 <span class="en">(gateway + slash commands)</span><span class="zh">（gateway 长连接 + 斜杠命令）</span></td></tr>
-              <tr><th><span class="en">Model</span><span class="zh">模型</span></th><td><span class="en">DeepSeek <code>deepseek-flash</code> through the OpenAI-compatible API (<code>openai</code> SDK). Plain chat completions, with function calling <b>only in owner-trust servers</b> that switched tools on; public servers' requests carry no tool list.</span><span class="zh">DeepSeek <code>deepseek-flash</code>，经 OpenAI 兼容接口（<code>openai</code> SDK）调用。普通对话补全，<b>只有开了工具的 owner 群</b>才带函数调用；public 群的请求里没有工具列表。</span></td></tr>
+              <tr><th><span class="en">Model</span><span class="zh">模型</span></th><td><span class="en">DeepSeek <code>deepseek-flash</code> through the OpenAI-compatible API (<code>openai</code> SDK). Plain chat completions with three read-only tools (read a page, read a video's subtitles, search); search is only offered when the server switched <b>Web search</b> on and runs server-side at DeepSeek.</span><span class="zh">DeepSeek <code>deepseek-flash</code>，经 OpenAI 兼容接口（<code>openai</code> SDK）调用。普通对话补全，带三个只读工具（读网页、读视频字幕、搜索）；只有群里开了 <b>搜索</b> 才提供搜索，搜索在 DeepSeek 服务端完成。</span></td></tr>
               <tr><th><span class="en">Fetching</span><span class="zh">抓取</span></th><td><code>httpx</code>, <code>feedparser</code>, <code>pypdf</code>, <code>python-docx</code>, <code>openpyxl</code>, <code>python-pptx</code></td></tr>
               <tr><th><span class="en">Network</span><span class="zh">网络</span></th><td><span class="en">Squid allowlist proxy; internal Docker network with no gateway</span><span class="zh">Squid 白名单代理；没有网关的 Docker 内部网络</span></td></tr>
               <tr><th><span class="en">Operations</span><span class="zh">运维</span></th><td><span class="en">Claude Code on the host runs <code>docker compose</code>; Kurt steers it from his phone</span><span class="zh">主机上的 Claude Code 跑 <code>docker compose</code>，Kurt 用手机遥控它</span></td></tr>
@@ -364,8 +363,8 @@ docker compose up -d --build</pre>
 
       <section>
         <h2><span class="en">Architecture</span><span class="zh">架构</span></h2>
-        <p><span class="en">Six containers: three programs from one image (bot, scheduler, fetcher), a key-less tools server, a key-less search server, and the proxy. The two that hold the Discord and DeepSeek secrets can only talk to Discord and DeepSeek. The ones that browse the web, use tools or parse files hold no such secret.</span><span class="zh">六个容器：三个程序共用一个镜像（bot、scheduler、fetcher），加一个无密钥的工具服务、一个无密钥的搜索服务，以及代理。拿着 Discord 和 DeepSeek 密钥的两个只能连 Discord 和 DeepSeek；能上网、用工具或解析文件的那些手里没有这类密钥。</span></p>
-        <div class="diagram" role="img" aria-label="Architecture: bot and scheduler reach Discord and DeepSeek only through the egress proxy; the key-less fetcher, tools server and SearXNG reach the public web through the same proxy; the scheduler mounts the local data folder, the bot mounts per-server configs and shared files, SearXNG mounts its settings.">
+        <p><span class="en">Four containers: three programs from one image (bot, scheduler, fetcher) and the proxy. The two that hold the Discord and DeepSeek secrets can only talk to Discord and DeepSeek. The fetcher, which browses the web, reads video subtitles and parses files, holds no such secret.</span><span class="zh">四个容器：三个程序共用一个镜像（bot、scheduler、fetcher），再加代理。拿着 Discord 和 DeepSeek 密钥的两个只能连 Discord 和 DeepSeek；能上网、读视频字幕和解析文件的 fetcher 手里没有这类密钥。</span></p>
+        <div class="diagram" role="img" aria-label="Architecture: bot and scheduler reach Discord and DeepSeek only through the egress proxy; the key-less fetcher reaches the public web through the same proxy; the scheduler mounts the local data folder and the bot mounts per-server configs and shared files.">
           <svg viewBox="0 0 820 440" xmlns="http://www.w3.org/2000/svg">
             <defs>
               <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
@@ -385,23 +384,11 @@ docker compose up -d --build</pre>
             <text x="44" y="206" font-size="14" font-weight="600" fill="var(--ink)">fetcher</text>
             <text x="44" y="226" font-size="11" fill="var(--muted)">no secrets</text>
 
-            <rect x="210" y="48" width="140" height="54" rx="8" fill="var(--bg)" stroke="var(--ok)"/>
-            <text x="224" y="70" font-size="14" font-weight="600" fill="var(--ink)">tools</text>
-            <text x="224" y="90" font-size="11" fill="var(--muted)">no secrets</text>
-
-            <rect x="210" y="116" width="140" height="54" rx="8" fill="var(--bg)" stroke="var(--ok)"/>
-            <text x="224" y="138" font-size="14" font-weight="600" fill="var(--ink)">searxng</text>
-            <text x="224" y="158" font-size="11" fill="var(--muted)">no key</text>
-
             <rect x="210" y="200" width="140" height="80" rx="8" fill="var(--bg)" stroke="var(--line)"/>
             <text x="224" y="228" font-size="14" font-weight="600" fill="var(--ink)">egress</text>
             <text x="224" y="248" font-size="11" fill="var(--muted)">Squid · HTTPS only</text>
             <text x="224" y="266" font-size="11" fill="var(--muted)">private IPs blocked</text>
 
-            <line x1="170" y1="60" x2="208" y2="60" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
-            <text x="173" y="53" font-size="9" fill="var(--muted)">MCP</text>
-            <line x1="255" y1="102" x2="255" y2="198" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
-            <line x1="305" y1="170" x2="305" y2="198" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
             <line x1="170" y1="75" x2="208" y2="212" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
             <line x1="170" y1="143" x2="208" y2="236" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
             <line x1="170" y1="211" x2="208" y2="262" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
@@ -411,7 +398,6 @@ docker compose up -d --build</pre>
             <text x="404" y="224" font-size="11" font-weight="600" fill="var(--ink)">mounts</text>
             <text x="404" y="244" font-size="11" fill="var(--ink)">data → scheduler</text>
             <text x="404" y="260" font-size="11" fill="var(--ink)">guilds/shared → bot</text>
-            <text x="404" y="276" font-size="11" fill="var(--ink)">settings → searxng</text>
 
             <rect x="610" y="60" width="195" height="70" rx="8" fill="var(--surface)" stroke="var(--accent)"/>
             <text x="624" y="86" font-size="13" font-weight="600" fill="var(--ink)">Discord</text>
@@ -421,7 +407,7 @@ docker compose up -d --build</pre>
             <rect x="610" y="230" width="195" height="80" rx="8" fill="var(--surface)" stroke="var(--ok)"/>
             <text x="624" y="258" font-size="13" font-weight="600" fill="var(--ink)">Public web</text>
             <text x="624" y="278" font-size="10" fill="var(--muted)">RSS, pages, video subtitles</text>
-            <text x="624" y="294" font-size="10" fill="var(--muted)">fetcher · tools · searxng</text>
+            <text x="624" y="294" font-size="10" fill="var(--muted)">fetcher only</text>
 
             <line x1="352" y1="228" x2="608" y2="98" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#arr)"/>
             <line x1="352" y1="252" x2="608" y2="268" stroke="var(--ok)" stroke-width="1.5" marker-end="url(#arr)"/>
@@ -435,10 +421,10 @@ docker compose up -d --build</pre>
         <ul>
           <li><span class="en">Every container: read-only filesystem, non-root user, all Linux capabilities dropped, <code>no-new-privileges</code>, memory/CPU/process limits, no published ports, no Docker socket.</span><span class="zh">每个容器：只读文件系统、非 root 用户、去掉全部 Linux capabilities、<code>no-new-privileges</code>、内存/CPU/进程数上限、不对外开端口、不挂 Docker socket。</span></li>
           <li><span class="en">The containers sit on an internal network with no route out and no host-side gateway. The only way out is the Squid proxy.</span><span class="zh">容器在一张没有出网路由、也没有主机侧网关的内部网络上，唯一的出口是 Squid 代理。</span></li>
-          <li><span class="en">Squid tells containers apart by fixed address: <b>bot</b> and <b>scheduler</b> may reach Discord and <code>api.deepseek.com</code> only; the <b>fetcher</b>, <b>tools</b> and <b>searxng</b> may reach any public site. Private, loopback and link-local addresses are refused after DNS for everyone, so nothing can reach the PC or the home network.</span><span class="zh">Squid 按固定地址区分容器：<b>bot</b> 和 <b>scheduler</b> 只能连 Discord 和 <code>api.deepseek.com</code>；<b>fetcher</b>、<b>tools</b> 和 <b>searxng</b> 能连任何公网网站。私网、回环和链路本地地址在 DNS 解析后一律拒绝，所以谁都碰不到电脑或家里的网络。</span></li>
-          <li><span class="en">All file parsing happens in the fetcher, which has no secrets and refuses to start if one is passed in. A malicious PDF can't get at the tokens. The tools server follows the same rule.</span><span class="zh">所有文件解析都在 fetcher 里做；它没有任何密钥，如果被传入密钥会拒绝启动。恶意 PDF 拿不到 token。工具服务也遵守同样的规则。</span></li>
-          <li><span class="en">Mounts are limited and deliberate: the scheduler gets the whole <code>data</code> folder; the bot gets <code>data/guilds</code> read-write (because <code>/setup</code> writes configs) and <code>data/shared</code> read-only (personas, news material); SearXNG gets only its own settings file.</span><span class="zh">挂载有限且明确：scheduler 挂整个 <code>data</code> 文件夹；bot 挂 <code>data/guilds</code>（读写，因为 <code>/setup</code> 要写配置）和 <code>data/shared</code>（只读，人设和新闻素材）；SearXNG 只挂它自己的设置文件。</span></li>
-          <li><span class="en">The model gets tools only in owner-trust servers that switched them on. Chat, files, pages and headlines are fetched by code and handed to it as untrusted data; the three tools are read-only, every call is charged and capped, and the tools server re-checks the server before acting. A prompt injection can at worst waste a few lookups or say something dumb.</span><span class="zh">模型只在开了工具的 owner 群里能调用工具。聊天、文件、网页和新闻标题都由代码取来，作为不可信数据交给它；三个工具都是只读的，每次调用都扣额度并且有上限，工具服务执行前还会再查一遍群。提示词注入最坏也只能浪费几次查询或让它说句蠢话。</span></li>
+          <li><span class="en">Squid tells containers apart by fixed address: <b>bot</b> and <b>scheduler</b> may reach Discord and <code>api.deepseek.com</code> only; the <b>fetcher</b> may reach any public site. Private, loopback and link-local addresses are refused after DNS for everyone, so nothing can reach the PC or the home network.</span><span class="zh">Squid 按固定地址区分容器：<b>bot</b> 和 <b>scheduler</b> 只能连 Discord 和 <code>api.deepseek.com</code>；<b>fetcher</b> 能连任何公网网站。私网、回环和链路本地地址在 DNS 解析后一律拒绝，所以谁都碰不到电脑或家里的网络。</span></li>
+          <li><span class="en">All file parsing happens in the fetcher, which has no secrets and refuses to start if one is passed in. A malicious PDF can't get at the tokens.</span><span class="zh">所有文件解析都在 fetcher 里做；它没有任何密钥，如果被传入密钥会拒绝启动。恶意 PDF 拿不到 token。</span></li>
+          <li><span class="en">Mounts are limited and deliberate: the scheduler gets the whole <code>data</code> folder; the bot gets <code>data/guilds</code> read-write (because <code>/setup</code> writes configs) and <code>data/shared</code> read-only (personas, news material).</span><span class="zh">挂载有限且明确：scheduler 挂整个 <code>data</code> 文件夹；bot 挂 <code>data/guilds</code>（读写，因为 <code>/setup</code> 要写配置）和 <code>data/shared</code>（只读，人设和新闻素材）。</span></li>
+          <li><span class="en">Every server's model gets three read-only tools (read a page, read a video's subtitles, search); search is offered only when the server switched Web search on. Chat, files, pages and headlines are fetched by code and handed to it as untrusted data; every call is charged and capped. A prompt injection can at worst waste a few lookups or say something dumb.</span><span class="zh">每个群的模型都有三个只读工具（读网页、读视频字幕、搜索）；只有群里开了搜索才提供搜索。聊天、文件、网页和新闻标题都由代码取来，作为不可信数据交给它；每次调用都扣额度并且有上限。提示词注入最坏也只能浪费几次查询或让它说句蠢话。</span></li>
         </ul>
       </section>
 
@@ -450,7 +436,7 @@ docker compose up -d --build</pre>
           <li><span class="en">Spend one unit of budget (unless it's Kurt).</span><span class="zh">扣 1 条余额（Kurt 不扣）。</span></li>
           <li><span class="en">Attachments and links go to the fetcher, which returns plain text.</span><span class="zh">附件和链接交给 fetcher，拿回纯文本。</span></li>
           <li><span class="en">Build context: reply chain first, then recent channel history, 12 messages max.</span><span class="zh">组装上下文：回复链优先，再补频道最近的消息，最多 12 条。</span></li>
-          <li><span class="en">In an owner server with tools on, the model may call <code>search</code>, <code>read_page</code> or <code>read_video</code> first. The bot fills in the server ID and site allow-list, charges one lookup per call, and stops the question after 4 calls or about 40,000 characters.</span><span class="zh">在开了工具的 owner 群里，模型可以先调用 <code>search</code>、<code>read_page</code> 或 <code>read_video</code>。群 ID 和网站白名单由 bot 填、模型碰不到；每次调用扣一次查询额度，一次提问最多 4 次调用或约 4 万字。</span></li>
+          <li><span class="en">The model may call <code>read_page</code> or <code>read_video</code> first, and <code>search</code> too when the server switched Web search on. The bot charges one lookup per call and stops the question after 4 calls or about 40,000 characters.</span><span class="zh">模型可以先调用 <code>read_page</code> 或 <code>read_video</code>；群里开了搜索时还能调用 <code>search</code>。每次调用扣一次查询额度，一次提问最多 4 次调用或约 4 万字。</span></li>
           <li><span class="en">A chat completion with the persona. A <code>&lt;&lt;&lt;FILE name.md&gt;&gt;&gt;</code> block in the answer becomes an attachment.</span><span class="zh">带人设调用对话补全。回答里如果有 <code>&lt;&lt;&lt;FILE name.md&gt;&gt;&gt;</code> 块，就变成附件发出。</span></li>
           <li><span class="en">If the model call fails or it answers nothing, the budget unit is refunded.</span><span class="zh">模型调用失败或没有回答时，余额退回。</span></li>
         </ol>

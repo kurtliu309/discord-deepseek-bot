@@ -11,5 +11,5 @@ discord.com
 # Discord attachment CDN (llmcord downloads text attachments from message.attachments[].url)
 cdn.discordapp.com
 
-# DeepSeek OpenAI-compatible API
+# DeepSeek API (OpenAI-compatible chat + Anthropic-compatible endpoint with server-side web search)
 api.deepseek.com

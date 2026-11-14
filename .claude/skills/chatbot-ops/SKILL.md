@@ -23,7 +23,7 @@ description: 运维本机 Docker Desktop 上的 Discord DeepSeek 聊天 bot v2�
 3. 全栈唯一的挂载是 `./data` → scheduler。不加别的 volume / bind mount、`ports`、`privileged`、`cap_add`、host 网络，不挂 docker socket；不删 `read_only`、`cap_drop`、`no-new-privileges`、非 root、资源上限。
 4. 不打印密钥：不 `Get-Content .env`，不跑不带 `--quiet` 的 `docker compose config`，不跑不带 `--format` 的 `docker inspect`，不 `docker exec ... env`。
 5. 不改密钥行（`DISCORD_BOT_TOKEN`、`DISCORD_CLIENT_ID`、`DEEPSEEK_API_KEY`），请 Kurt 自己用记事本改。
-6. 不给模型加 tools / function calling / MCP / 代码执行。外部内容只由代码取来当数据传。
+6. 模型工具只读：读网页、读视频字幕（经 fetcher）一直可用；搜索用 DeepSeek 服务端的 `web_search`，按群的"搜索"开关（owner 和群管理员都能开关）。不加写文件、跑命令、MCP 或其他工具，要加先问 Kurt。每次工具调用由 bot 查额度；外部内容当数据传。
 7. 给 bot / scheduler 加白名单域名、改人设底线段落、加挂载：先问 Kurt。
 8. 不伪装 User-Agent 去绕过网站的反爬（Reddit 现在 403 就是这样，正规办法是官方 API）。
 

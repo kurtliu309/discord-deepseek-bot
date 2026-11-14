@@ -7,14 +7,19 @@ it reach any public host on 443 but still blocks private / loopback / link-local
 Parsers (pdf, docx, xlsx, pptx) run only here, so a malicious file cannot reach a secret.
 
 Endpoints (JSON in / JSON out, listen on :8080):
-  POST /url              {"url": str}                      -> {"ok", "title", "text", "truncated"} | {"ok": false, "error"}
+  POST /url              {"url": str, "max_chars": int}     -> {"ok", "title", "text", "truncated"} | {"ok": false, "error"}
+                         max_chars is optional (default FETCH_MAX_TEXT, clamped to 1000..60000)
   POST /file?name=<fn>   raw bytes (<= 10 MB)               -> same shape
+  POST /video            {"url": str, "max_chars": int}     -> same shape (public subtitles only)
+                         yt-dlp reads the video metadata and its public subtitle track through
+                         the egress proxy; no audio download, no ffmpeg, no ASR, no cookies.
   POST /rss              {"feeds": [{"name","url"}], "per_feed": int}   -> {"items": [{"source","title","link","summary"}]}
                          (Reddit uses its public RSS feeds through /rss; requests to one host are spaced out)
   GET  /health                                              -> {"ok": true}
 """
 
 import csv
+import html
 import io
 import json
 import os
@@ -27,10 +32,15 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 import httpx
+import yt_dlp
 
 MAX_BYTES = 10 * 1024 * 1024
 MAX_UNZIPPED = 50 * 1024 * 1024
 MAX_TEXT = int(os.environ.get("FETCH_MAX_TEXT", "30000"))
+# Optional max_chars from a request is clamped to this range (a video subtitle track can be
+# long, but the model still gets a bounded amount of text).
+MAX_CHARS_MIN, MAX_CHARS_MAX = 1000, 60000
+VIDEO_CHARS = 30000
 UA = "Mozilla/5.0 (compatible; discord-deepseek-bot-fetcher/1.0)"
 
 TEXT_EXT = {
@@ -86,9 +96,18 @@ def html_to_text(raw):
     return p.title.strip(), p.text()
 
 
-def cap(text):
+def cap(text, max_chars=None):
+    limit = MAX_TEXT if max_chars is None else max_chars
     text = text.strip()
-    return (text[:MAX_TEXT], True) if len(text) > MAX_TEXT else (text, False)
+    return (text[:limit], True) if len(text) > limit else (text, False)
+
+
+def clamp_int(value, low, high, default):
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(low, min(high, n))
 
 
 def ext_of(name):
@@ -204,8 +223,8 @@ def _read(r):
     return bytes(buf), r.headers.get("content-type", ""), str(r.url)
 
 
-def fetch_url(url):
-    url = github_raw(url.strip())
+def fetch_url(url, max_chars=None):
+    url = github_raw((url or "").strip())
     data, ctype, final = download(url)
     name = urlparse(final).path.rsplit("/", 1)[-1] or "page"
     if "html" in ctype:
@@ -214,7 +233,7 @@ def fetch_url(url):
         if "pdf" in ctype and not name.lower().endswith(".pdf"):
             name += ".pdf"
         title, text = name, parse_file(name if "." in name else name + ".txt", data)
-    text, truncated = cap(text)
+    text, truncated = cap(text, max_chars)
     return {"ok": True, "title": title[:300], "text": text, "truncated": truncated}
 
 
@@ -251,6 +270,350 @@ def fetch_rss(feeds, per_feed):
     return items
 
 
+# --------------------------------------------------------------------------- #
+# Video: public subtitles only. Moved here from tools/server.py (which is being
+# removed); the guild allowlist it used to check is gone — this fetcher serves one
+# bot and blocks private / loopback hosts itself, like the egress proxy does.
+# Subtitle helpers came from
+# D:\Kurt\hub\global\research\skills\fetch-and-summarize\fetch_video.py (subtitle-only
+# path; no ffmpeg / CUDA / Whisper bits).
+# --------------------------------------------------------------------------- #
+PREFERRED_LANGS = ["zh-Hans", "zh-CN", "ai-zh", "zh", "zh-Hant", "en"]
+SUBTITLE_EXT_ORDER = ["json3", "srt", "vtt", "json"]
+
+_PRIVATE_HOST_RE = re.compile(
+    r"^(localhost|.*\.localhost|.*\.local|.*\.internal|"
+    r"0\..*|10\..*|127\..*|169\.254\..*|"
+    r"172\.(1[6-9]|2[0-9]|3[01])\..*|192\.168\..*|"
+    r"100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\..*|"
+    r"\[?::1\]?|\[?f[cd][0-9a-f]{2}:.*)$", re.IGNORECASE)
+
+
+def check_video_url(url):
+    """Trim, default to https, upgrade http -> https, and refuse loopback / private hosts."""
+    url = (url or "").strip()
+    if not url:
+        raise ValueError("url 不能为空")
+    if not re.match(r"^[a-z][a-z0-9+.-]*://", url, re.IGNORECASE):
+        url = "https://" + url
+    url = https(url)
+    if not url.lower().startswith("https://"):
+        raise ValueError("只允许 https 链接")
+    host = urlparse(url).hostname or ""
+    if not host:
+        raise ValueError("链接里没有域名")
+    if _PRIVATE_HOST_RE.match(host):
+        raise ValueError(f"不读内网/本机地址：{host}")
+    return url
+
+
+def fmt_ts(seconds):
+    s = max(0, int(seconds or 0))
+    return f"{s // 60:02d}:{s % 60:02d}"
+
+
+def fmt_duration(seconds):
+    s = max(0, int(seconds or 0))
+    h, rem = divmod(s, 3600)
+    m, sec = divmod(rem, 60)
+    return f"{h}:{m:02d}:{sec:02d}" if h else f"{m:02d}:{sec:02d}"
+
+
+def _is_cjk(ch):
+    return "\u3400" <= ch <= "\u9fff" or "\u3000" <= ch <= "\u303f" or "\uff00" <= ch <= "\uffef"
+
+
+def _join_parts(parts):
+    out = ""
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        if out and not (_is_cjk(out[-1]) and _is_cjk(part[0])):
+            out += " "
+        out += part
+    return re.sub(r"\s+", " ", out).strip()
+
+
+def _norm_lang(lang):
+    return (lang or "").strip().lower().replace("_", "-")
+
+
+def _find_lang(mapping, lang):
+    if not mapping:
+        return None
+    if lang in mapping:
+        return mapping[lang]
+    want = _norm_lang(lang)
+    for key, value in mapping.items():
+        if _norm_lang(key) == want:
+            return value
+    for key, value in mapping.items():
+        if _norm_lang(key).startswith(want + "-"):
+            return value
+    return None
+
+
+def _choose_entry(entries):
+    if not entries:
+        return None
+    if isinstance(entries, dict):
+        entries = [entries]
+    ranked = []
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        ext = (item.get("ext") or "").lower()
+        if ext == "xml":  # danmaku XML is not a subtitle
+            continue
+        rank = SUBTITLE_EXT_ORDER.index(ext) if ext in SUBTITLE_EXT_ORDER else len(SUBTITLE_EXT_ORDER)
+        ranked.append((rank, item))
+    if not ranked:
+        return None
+    ranked.sort(key=lambda x: x[0])
+    return ranked[0][1]
+
+
+def pick_subtitle(subtitles, automatic_captions):
+    manual = {k: v for k, v in (subtitles or {}).items()
+              if not _norm_lang(k).startswith("danmaku")}
+    auto = {k: v for k, v in (automatic_captions or {}).items()
+            if not _norm_lang(k).startswith("danmaku")}
+
+    for lang in PREFERRED_LANGS:
+        entry = _choose_entry(_find_lang(manual, lang))
+        if entry:
+            return "manual", lang, entry
+        entry = _choose_entry(_find_lang(auto, lang))
+        if entry:
+            return "auto", lang, entry
+    for lang, entries in manual.items():
+        entry = _choose_entry(entries)
+        if entry:
+            return "manual", lang, entry
+    for lang, entries in auto.items():
+        entry = _choose_entry(entries)
+        if entry:
+            return "auto", lang, entry
+    return None
+
+
+_SRT_TIME = re.compile(
+    r"(\d+):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*(\d+):(\d{2}):(\d{2})[,.](\d{1,3})")
+_VTT_TIME = re.compile(
+    r"(?:(\d+):)?(\d{2}):(\d{2})[.,](\d{1,3})\s*-->\s*(?:(\d+):)?(\d{2}):(\d{2})[.,](\d{1,3})")
+
+
+def _time_from_match(groups):
+    h, m, s, ms = groups
+    return int(h or 0) * 3600 + int(m) * 60 + int(s) + int(ms.ljust(3, "0")) / 1000.0
+
+
+def parse_srt(text):
+    text = text.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
+    cues = []
+    for block in re.split(r"\n{2,}", text.strip()):
+        lines = [ln.strip() for ln in block.split("\n") if ln.strip()]
+        if not lines:
+            continue
+        if lines[0].isdigit():
+            lines = lines[1:]
+        if not lines:
+            continue
+        m = _SRT_TIME.search(lines[0])
+        if m:
+            start, end = _time_from_match(m.groups()[:4]), _time_from_match(m.groups()[4:])
+        else:
+            m = _VTT_TIME.search(lines[0])
+            if not m:
+                continue
+            g = m.groups()
+            start = _time_from_match([g[0], g[1], g[2], g[3]])
+            end = _time_from_match([g[4], g[5], g[6], g[7]])
+        body = " ".join(lines[1:])
+        body = html.unescape(re.sub(r"<[^>]+>", "", body))
+        body = _join_parts(body.split())
+        if body:
+            cues.append((start, end, body))
+    return cues
+
+
+def parse_json3(text):
+    data = json.loads(text)
+    cues = []
+    events = data.get("events") if isinstance(data, dict) else None
+    if isinstance(events, list):
+        for ev in events:
+            segs = ev.get("segs") or []
+            body = _join_parts([s.get("utf8", "") for s in segs])
+            body = re.sub(r"\s+", " ", body.replace("\n", " ")).strip()
+            if not body:
+                continue
+            start = float(ev.get("tStartMs") or 0) / 1000.0
+            dur = float(ev.get("dDurationMs") or 0) / 1000.0
+            cues.append((start, start + dur, body))
+        return cues
+    body = data.get("body") if isinstance(data, dict) else None
+    if isinstance(body, list):
+        for item in body:
+            if not isinstance(item, dict):
+                continue
+            content = _join_parts([str(item.get("content") or "")])
+            if not content:
+                continue
+            start = float(item.get("from") or 0)
+            end = float(item.get("to") or start)
+            cues.append((start, end, content))
+    return cues
+
+
+def parse_subtitle(text, ext=""):
+    stripped = text.lstrip("\ufeff \t\r\n")
+    if stripped.startswith("{") or stripped.startswith("["):
+        try:
+            return parse_json3(text)
+        except (ValueError, TypeError):
+            pass
+    if "-->" in text:
+        return parse_srt(text)  # parse_srt skips the WEBVTT header block
+    return []
+
+
+def merge_cues(cues, min_span=15.0, max_span=30.0, max_gap=2.0):
+    groups = []
+    cur = None  # [start, end, [texts]]
+    for start, end, text in sorted(cues, key=lambda c: (c[0], c[1])):
+        text = (text or "").strip()
+        if not text:
+            continue
+        end = max(end, start)
+        if cur is None:
+            cur = [start, end, [text]]
+        elif start - cur[1] <= max_gap and start - cur[0] <= max_span:
+            cur[1] = max(cur[1], end)
+            cur[2].append(text)
+        else:
+            groups.append(cur)
+            cur = [start, end, [text]]
+        if cur[1] - cur[0] >= min_span:
+            groups.append(cur)
+            cur = None
+    if cur is not None:
+        groups.append(cur)
+    return [(g[0], _join_parts(g[2])) for g in groups]
+
+
+def _single_entry(info):
+    """If yt-dlp handed back a playlist, take the first entry."""
+    if isinstance(info, dict) and info.get("_type") == "playlist" and info.get("entries"):
+        entries = [e for e in info["entries"] if e]
+        if entries:
+            return entries[0]
+    return info
+
+
+def video_opts():
+    """yt-dlp options. No cookies, no ffmpeg: metadata and subtitles only.
+
+    yt-dlp has no trust_env, so the egress proxy has to be passed explicitly.
+    """
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "noplaylist": True,
+        "socket_timeout": 30,
+        "retries": 3,
+        "noprogress": True,
+    }
+    proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
+    if proxy:
+        opts["proxy"] = proxy
+    return opts
+
+
+def download_subtitle(entry, opts):
+    data = entry.get("data")
+    if isinstance(data, str) and data.strip():
+        return data
+    url = entry.get("url")
+    if not url:
+        return None
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        resp = ydl.urlopen(url)
+        raw = resp.read()
+    return raw.decode("utf-8", errors="replace")
+
+
+def explain_video_error(err):
+    low = str(err).lower()
+    if "unsupported url" in low:
+        return "不支持的链接：yt-dlp 无法识别这个站点"
+    if any(k in low for k in ("login", "sign in", "members-only", "private video",
+                              "subscription", "登录", "会员")):
+        return "这个视频需要登录或会员权限；只读工具不带 cookies"
+    if any(k in low for k in ("timed out", "timeout", "connection", "network",
+                              "getaddrinfo", "unable to download webpage", "reset")):
+        return "网络错误：连接失败或超时"
+    if "404" in low or "deleted" in low:
+        return "视频不存在或已被删除"
+    detail = [ln for ln in str(err).splitlines() if ln.strip()]
+    return f"{type(err).__name__}: {detail[-1][:200] if detail else '未知错误'}"
+
+
+def format_video(title, url, uploader, duration, lang, kind, cues):
+    merged = merge_cues(cues)
+    lines = [
+        f"# {title or '(无标题)'}",
+        f"链接：{url}",
+        f"频道：{uploader or '未知'}",
+        f"时长：{fmt_duration(duration)}",
+        f"字幕：{lang}（{'人工' if kind == 'manual' else '自动'}）",
+        "",
+    ]
+    for start, text in merged:
+        lines.append(f"[{fmt_ts(start)}] {text}")
+    return "\n".join(lines).rstrip()
+
+
+def fetch_video(url, max_chars=VIDEO_CHARS):
+    """A video's public subtitles as timestamped text. Raises ValueError with a
+    model-readable reason when it cannot be read."""
+    url = check_video_url(url)
+    limit = clamp_int(max_chars, MAX_CHARS_MIN, MAX_CHARS_MAX, VIDEO_CHARS)
+    opts = video_opts()
+
+    try:
+        with yt_dlp.YoutubeDL({**opts, "writesubtitles": True}) as ydl:
+            info = _single_entry(ydl.extract_info(url, download=False))
+    except Exception as e:
+        raise ValueError(f"读取视频失败：{explain_video_error(e)}") from e
+    if not isinstance(info, dict):
+        raise ValueError("读取视频失败：没有拿到视频信息")
+
+    chosen = pick_subtitle(info.get("subtitles"), info.get("automatic_captions"))
+    if not chosen:
+        raise ValueError("这个视频没有公开字幕")
+    kind, lang, entry = chosen
+
+    try:
+        raw = download_subtitle(entry, opts)
+        cues = parse_subtitle(raw or "", entry.get("ext") or "")
+    except Exception as e:
+        detail = str(e).strip().splitlines()
+        raise ValueError(
+            f"字幕下载失败：{type(e).__name__}: {detail[-1][:200] if detail else ''}") from e
+    if not cues:
+        raise ValueError("这个视频没有公开字幕")
+
+    title = info.get("title") or ""
+    uploader = info.get("uploader") or info.get("channel") or info.get("creator") or ""
+    final_url = info.get("webpage_url") or url
+    duration = info.get("duration") or cues[-1][1]
+    text, truncated = cap(format_video(title, final_url, uploader, duration, lang, kind, cues), limit)
+    return {"ok": True, "title": title[:300], "text": text, "truncated": truncated}
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, code, obj):
         body = json.dumps(obj).encode()
@@ -274,7 +637,12 @@ class Handler(BaseHTTPRequestHandler):
             body = self.rfile.read(length)
             u = urlparse(self.path)
             if u.path == "/url":
-                return self._send(200, fetch_url(json.loads(body)["url"]))
+                req = json.loads(body)
+                max_chars = clamp_int(req.get("max_chars"), MAX_CHARS_MIN, MAX_CHARS_MAX, MAX_TEXT)
+                return self._send(200, fetch_url(req.get("url") or "", max_chars))
+            if u.path == "/video":
+                req = json.loads(body)
+                return self._send(200, fetch_video(req.get("url") or "", req.get("max_chars")))
             if u.path == "/file":
                 name = (parse_qs(u.query).get("name") or ["file"])[0][:200]
                 text, truncated = cap(parse_file(name, body))

@@ -244,7 +244,7 @@ class TestGatherDataV34(unittest.IsolatedAsyncioTestCase):
 
 
 # --------------------------------------------------------------------------- #
-# Bot.reply: when read_links is off nothing is read; jump-ins stay quiet
+# Bot.reply: links are always read (v3.7); jump-ins stay quiet
 # --------------------------------------------------------------------------- #
 
 
@@ -279,6 +279,13 @@ class WiringBot(bot.Bot):
         self.turns.append(turns)
         return "hello"
 
+    # v3.7: chat replies always carry the read tools, so they go through the tool loop.
+    tools = None
+
+    async def ask_model_message(self, system, message_turns, max_tokens, tools=None):
+        self.turns.append(message_turns)
+        return SimpleNamespace(content="hello", tool_calls=None)
+
     async def _send_plan(self, target, plan):
         self.plans.append(plan)
 
@@ -308,12 +315,13 @@ class TestReadLinksWiring(unittest.IsolatedAsyncioTestCase):
             channel=SimpleNamespace(id=222),
         )
 
-    async def test_read_links_off_reads_neither_message_nor_reply(self):
-        off = cfg(features={"read_links": {"on": False}})
+    async def test_links_are_read_even_with_search_off(self):
+        off = cfg(features={"tools": {"on": False}})
         for trigger in ("mention", "interject"):
             fake = WiringBot(self.personas, self.guilds, off)
             await bot.Bot.reply(fake, self._message(), trigger, False, off, "111")
-            self.assertEqual(fake.gathers, [], trigger)
+            self.assertEqual(len(fake.gathers), 1, trigger)
+            self.assertIs(fake.gathers[0]["quiet"], trigger == "interject", trigger)
 
     async def test_interject_reads_quietly_and_feeds_the_prompt(self):
         on = cfg()

@@ -307,7 +307,6 @@ class TestSetupForm(unittest.TestCase):
         return g.GuildConfig.model_validate(
             {
                 "name": "群",
-                "trust": "owner",
                 "allowed_channels": [7],
                 "quiet_channels": [1],
                 "budget": {"replies_per_day": 50, "lookups_per_day": 0, "reset_time": "08:30"},
@@ -322,7 +321,7 @@ class TestSetupForm(unittest.TestCase):
 
     def test_form_roundtrip(self):
         form = setup_ui.form_from_config(self._base())
-        self.assertEqual(form.trust, "owner")
+        self.assertTrue(form.tools_on)
         self.assertEqual(form.recap_time, "22:00")
         cfg = setup_ui.apply_form(self._base(), form)
         self.assertEqual(
@@ -331,7 +330,6 @@ class TestSetupForm(unittest.TestCase):
 
     def test_form_to_config(self):
         form = setup_ui.SetupForm(
-            trust="public",
             persona="turtle",
             style="chatty",
             language="zh",
@@ -349,7 +347,6 @@ class TestSetupForm(unittest.TestCase):
             consent=True,
         )
         cfg = setup_ui.apply_form(self._base(), form)
-        self.assertEqual(str(cfg.trust), "public")
         self.assertEqual((cfg.persona, cfg.style, cfg.language), ("turtle", "chatty", "zh"))
         self.assertEqual((cfg.budget.replies_per_day, cfg.budget.lookups_per_day), (20, 3))
         self.assertEqual(cfg.quiet_channels, [5, 6])
@@ -366,20 +363,17 @@ class TestSetupForm(unittest.TestCase):
         self.assertEqual(cfg.extra_prompt, "be nice")
         self.assertEqual(cfg.features.topics.count, 4)
         self.assertEqual(len(cfg.features.topics.feeds), 1)
-        # public cannot keep tools on
+        # the search switch follows the form (the default form has it off)
         self.assertFalse(cfg.features.tools.on)
 
     def test_owner_form_keeps_tools(self):
         form = setup_ui.form_from_config(self._base())
         self.assertTrue(setup_ui.apply_form(self._base(), form).features.tools.on)
 
-    def test_upgrade_to_owner_turns_tools_on(self):
-        # the menu has no tools switch: moving a guild to owner must switch tools on
-        base = self._base().model_copy(update={"trust": g.Trust.PUBLIC})
-        base.features.tools.on = False
-        form = setup_ui.form_from_config(base)
-        form.trust = "owner"
-        self.assertTrue(setup_ui.apply_form(base, form, is_owner=True).features.tools.on)
+    def test_search_switch_can_be_turned_off(self):
+        form = setup_ui.form_from_config(self._base())
+        form.tools_on = False
+        self.assertFalse(setup_ui.apply_form(self._base(), form).features.tools.on)
 
     def test_bad_time_is_reported(self):
         base = self._base()
@@ -404,9 +398,10 @@ class TestSetupForm(unittest.TestCase):
     def test_default_config_for_new_guild(self):
         cfg = setup_ui.default_config("新群")
         self.assertEqual(cfg.name, "新群")
-        self.assertEqual(str(cfg.trust), "public")
+        self.assertFalse(hasattr(cfg, "trust"))
         self.assertFalse(cfg.consent)
         self.assertTrue(cfg.features.chat.on)
+        self.assertFalse(cfg.features.tools.on)  # search starts off
 
 
 class TestSetupStart(unittest.IsolatedAsyncioTestCase):
@@ -469,11 +464,10 @@ class TestSetupStart(unittest.IsolatedAsyncioTestCase):
 
 
 class TestSetupToolsAndPersonas(unittest.TestCase):
-    def test_tools_greyed_out_for_public(self):
-        self.assertFalse(setup_ui.tools_available("public"))
-        self.assertTrue(setup_ui.tools_available("owner"))
-        self.assertIn("不可用", setup_ui.tools_status("public"))
-        self.assertIn("可用", setup_ui.tools_status("owner"))
+    def test_search_switch_is_visible_and_off_by_default(self):
+        self.assertFalse(setup_ui.SetupForm().tools_on)  # a new guild starts with search off
+        self.assertEqual(setup_ui.t("zh", "btn_search"), "搜索")
+        self.assertEqual(setup_ui.t("en", "btn_search"), "Web search")
 
     def test_personas_skip_underscore_and_incomplete(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -581,7 +575,6 @@ class TestGuildRulesCard(unittest.TestCase):
         cfg = g.GuildConfig.model_validate(
             {
                 "name": "x",
-                "trust": "owner",
                 "features": {
                     "interject": {"on": False},
                     "recap": {"on": True, "channel": 123456789012345678, "time": "21:30"},

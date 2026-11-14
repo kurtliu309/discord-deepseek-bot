@@ -79,14 +79,14 @@ def make_personas(tmp):
 
 class TestConfigFields(unittest.TestCase):
     def test_old_config_without_fields_gets_empty_lists(self):
-        cfg = g.parse_config({"name": "old", "trust": "owner"})
+        cfg = g.parse_config({"name": "old"})
         self.assertEqual(cfg.blocked_users, [])
         self.assertEqual(cfg.admins, [])
 
     def test_old_yaml_file_without_fields_loads(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.yaml"
-            path.write_text("name: old\ntrust: owner\n", encoding="utf-8")
+            path.write_text("name: old\n", encoding="utf-8")
             cfg = g.load_config_file(path)
             self.assertEqual((cfg.blocked_users, cfg.admins), ([], []))
 
@@ -337,17 +337,28 @@ def make_view(tmp, *, actor_id=None, notify_owner=None, **cfg):
     return store, view
 
 
-class TestServerSideOwnerOnlyFields(unittest.TestCase):
-    def test_admin_form_cannot_change_trust_or_admins(self):
-        base = make_config(trust="public", admins=[ADMIN])
+class TestServerSideOwnerOnlyFields(unittest.IsolatedAsyncioTestCase):
+    def test_admin_form_cannot_change_admins(self):
+        base = make_config(admins=[ADMIN])
         form = setup_ui.form_from_config(base)
-        form.trust = "owner"
         form.admins = [BLOCKED]
         form.persona = "chatty"
         cfg = setup_ui.apply_form(base, form, is_owner=False, owner_id=OWNER)
-        self.assertEqual(str(cfg.trust), "public")  # forced back
         self.assertEqual(cfg.admins, [ADMIN])       # forced back
         self.assertEqual(cfg.persona, "chatty")     # other fields do change
+
+    def test_admin_can_flip_the_search_switch(self):
+        base = make_config()
+        form = setup_ui.form_from_config(base)
+        self.assertFalse(form.tools_on)
+        form.tools_on = True
+        cfg = setup_ui.apply_form(base, form, is_owner=False, owner_id=OWNER)
+        self.assertTrue(cfg.features.tools.on)
+        self.assertTrue(g.effective(cfg, "tools"))
+
+        form.tools_on = False
+        cfg = setup_ui.apply_form(cfg, form, is_owner=False, owner_id=OWNER)
+        self.assertFalse(cfg.features.tools.on)
 
     def test_admin_can_change_the_blacklist(self):
         base = make_config(admins=[ADMIN])
@@ -356,31 +367,27 @@ class TestServerSideOwnerOnlyFields(unittest.TestCase):
         cfg = setup_ui.apply_form(base, form, is_owner=False, owner_id=OWNER)
         self.assertEqual(cfg.blocked_users, [BLOCKED])
 
-    def test_owner_can_change_trust_and_admins_but_never_saves_self(self):
-        base = make_config(trust="public", admins=[])
+    def test_owner_can_change_admins_but_never_saves_self(self):
+        base = make_config(admins=[])
         form = setup_ui.form_from_config(base)
-        form.trust = "owner"
         form.admins = [ADMIN, OWNER]
         form.blocked_users = [BLOCKED, OWNER]
         cfg = setup_ui.apply_form(base, form, is_owner=True, owner_id=OWNER)
-        self.assertEqual(str(cfg.trust), "owner")
         self.assertEqual(cfg.admins, [ADMIN])
         self.assertEqual(cfg.blocked_users, [BLOCKED])
 
-    async def test_admin_view_save_forces_trust_back(self):
+    async def test_admin_view_save_forces_admins_back(self):
         with tempfile.TemporaryDirectory() as tmp:
-            store, view = make_view(
-                tmp, actor_id=ADMIN, trust="public", admins=[ADMIN]
-            )
-            view.form.trust = "owner"
+            store, view = make_view(tmp, actor_id=ADMIN, admins=[ADMIN])
             view.form.admins = [BLOCKED]
             view.form.blocked_users = [BLOCKED]
+            view.form.tools_on = True
             interaction, response = fake_interaction(ADMIN)
             await view._on_save(interaction)
             saved = store.get("111")
-            self.assertEqual(str(saved.trust), "public")
             self.assertEqual(saved.admins, [ADMIN])
             self.assertEqual(saved.blocked_users, [BLOCKED])
+            self.assertTrue(saved.features.tools.on)  # not owner-only any more
             self.assertEqual(len(response.edits), 1)
 
 
@@ -390,6 +397,17 @@ class TestServerSideOwnerOnlyFields(unittest.TestCase):
 
 
 class TestConfigDiff(unittest.TestCase):
+    def test_search_switch_change_is_listed(self):
+        old = make_config()
+        new = make_config(features={"tools": {"on": True}})
+        paths = dict(setup_ui.config_diff(old, new))
+        key = next(p for p in paths if p.endswith("tools.on"))
+        self.assertEqual(paths[key], "false → true")
+        notice = setup_ui.change_notice(
+            old, new, guild_name="群", actor_name="Alice", lang="zh"
+        )
+        self.assertIn("tools.on", notice)
+
     def test_only_changed_fields_are_listed(self):
         old = make_config(features={"interject": {"chance": 0.03}})
         new = make_config(
@@ -598,17 +616,22 @@ class TestSetupLayout(unittest.IsolatedAsyncioTestCase):
                 self.assertFalse(users[0].disabled)       # blocked list: admins may edit
                 self.assertEqual(users[1].disabled, disabled)  # admins list: owner only
 
-    def test_owner_only_controls_are_disabled_for_admins(self):
+    def test_owner_only_notice_only_for_admins(self):
         with tempfile.TemporaryDirectory() as tmp:
             owner_view, admin_view = self._views(tmp)
             for view, is_owner in ((owner_view, True), (admin_view, False)):
                 view.page = 1
                 view._build()
-                trust = [i for i in view.children if isinstance(i, discord.ui.Select)][0]
-                self.assertEqual(trust.disabled, not is_owner)
+                # Nothing on page 1 is owner-only any more (search is open to admins).
+                self.assertFalse(any(i.disabled for i in view.children
+                                     if isinstance(i, discord.ui.Select)))
                 self.assertEqual(
                     "只有主人能改" in view.render(), not is_owner
                 )
+                search = [i for i in view.children
+                          if getattr(i, "label", None) == setup_ui.t("zh", "btn_search")]
+                self.assertEqual(len(search), 1)
+                self.assertFalse(search[0].disabled)
 
     async def test_admin_cannot_select_itself_into_the_admin_list(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -1,100 +1,111 @@
-"""Model tool loop for owner guilds: schemas, the MCP client, and the capped loop.
+"""Model tool loop: schemas, the three read-only tools, and the capped loop.
 
-Design: docs/notes/design-v3.md §10. The three read-only tools live in the keyless
-``tools`` container behind MCP streamable HTTP. The bot decides *whether* the model may
-use tools at all (public guilds never even send a tool list), charges one lookup before
-every call and enforces the per-question caps below.
+v3.7: the three tools are implemented here instead of in the old MCP ``tools`` container.
+``read_page`` / ``read_video`` ask the keyless fetcher (``POST /url`` / ``POST /video``);
+``search`` calls DeepSeek's Anthropic-compatible endpoint with its built-in server-side
+``web_search`` tool. The bot decides *which* tools a question may use (a plain array of
+OpenAI-format function schemas), charges one lookup before every call and enforces the
+per-question caps below.
 
-``guild_id`` and ``allow_domains`` are never left to the model: this module drops any
-values it supplies and injects the real ones. Everything a tool returns is external
-content, so it reaches the model wrapped in the same untrusted-data markers as the
-bot's file / web data (``=== tool: <name> === ... === end tool ===``).
+Schemas only expose parameters the model may fill: ``query``, ``url`` and ``max_chars``.
+Anything else the model sends is dropped before a tool runs. Everything a tool returns
+is external content, so it reaches the model wrapped in the same untrusted-data markers
+as the bot's file / web data (``=== tool: <name> === ... === end tool ===``).
 
-No Discord or OpenAI imports here: the loop is plain async logic and is unit-tested
-with a fake ``ask`` and a fake tools client.
+No Discord or OpenAI imports here: the loop is plain async logic and is unit-tested with
+a fake ``ask`` and fake HTTP transports.
 """
 
 import json
+
+import httpx
 
 MAX_CALLS = 4  # tool executions per question
 MAX_CHARS = 40000  # tool output characters per question, all calls together
 MAX_ROUNDS_PAD = 3  # extra model rounds on top of MAX_CALLS, so a confused model cannot loop
 
 ALLOWED_TOOLS = ("search", "read_page", "read_video")
-INJECTED_KEYS = ("guild_id", "allow_domains")
+SEARCH_URL = "https://api.deepseek.com/anthropic/v1/messages"
+SEARCH_MAX_USES = 2  # DeepSeek-side searches per one ``search`` tool call
+SEARCH_TIMEOUT = 120
+MAX_SOURCES = 10
 
-# OpenAI function-calling schemas. Intentionally no guild_id / allow_domains: the model
-# must not see them at all (the bot fills them in on every call).
-TOOL_SCHEMAS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "search",
-            "description": (
-                "Search the web. Returns a JSON list of {title, url, snippet}, already "
-                "filtered to the sites this server allows. Use it when you need current "
-                "facts, not when you can answer from what you know."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "What to search for."},
-                    "max_results": {
-                        "type": "integer", "minimum": 1, "maximum": 20, "default": 8,
-                        "description": "How many results to return (1-20).",
-                    },
-                },
-                "required": ["query"],
-                "additionalProperties": False,
+# OpenAI function-calling schemas. Only parameters the model may fill; anything else it
+# sends is dropped by ``clean_args`` before the tool runs.
+SEARCH_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "search",
+        "description": (
+            "Search the web. Returns the relevant facts with the URL of each source. "
+            "Use it when you need current facts, not when you can answer from what you "
+            "know."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "What to search for."},
             },
+            "required": ["query"],
+            "additionalProperties": False,
         },
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "read_page",
-            "description": (
-                "Open one public https page and return its text (title + body). Use it "
-                "after search, or when someone gives you a link to read."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "url": {"type": "string", "description": "The https URL to read."},
-                    "max_chars": {
-                        "type": "integer", "minimum": 500, "maximum": 50000, "default": 20000,
-                        "description": "Longest text to return, in characters.",
-                    },
+}
+
+READ_PAGE_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "read_page",
+        "description": (
+            "Open one public https page and return its text (title + body). Use it "
+            "after search, or when someone gives you a link to read."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "The https URL to read."},
+                "max_chars": {
+                    "type": "integer", "minimum": 500, "maximum": 50000, "default": 20000,
+                    "description": "Longest text to return, in characters.",
                 },
-                "required": ["url"],
-                "additionalProperties": False,
             },
+            "required": ["url"],
+            "additionalProperties": False,
         },
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "read_video",
-            "description": (
-                "Read a video's PUBLIC subtitles as timestamped text. No audio download "
-                "and no transcription: if the video has no public subtitles you get a "
-                "short reason instead."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "url": {"type": "string", "description": "The video URL."},
-                    "max_chars": {
-                        "type": "integer", "minimum": 500, "maximum": 50000, "default": 30000,
-                        "description": "Longest text to return, in characters.",
-                    },
+}
+
+READ_VIDEO_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "read_video",
+        "description": (
+            "Read a video's PUBLIC subtitles as timestamped text. No audio download "
+            "and no transcription: if the video has no public subtitles you get a "
+            "short reason instead."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "The video URL."},
+                "max_chars": {
+                    "type": "integer", "minimum": 500, "maximum": 50000, "default": 30000,
+                    "description": "Longest text to return, in characters.",
                 },
-                "required": ["url"],
-                "additionalProperties": False,
             },
+            "required": ["url"],
+            "additionalProperties": False,
         },
     },
-]
+}
+
+TOOL_SCHEMAS = [SEARCH_SCHEMA, READ_PAGE_SCHEMA, READ_VIDEO_SCHEMA]
+# Per-tool whitelist of model-supplied arguments (nothing else is forwarded).
+SCHEMA_ARGS = {
+    "search": ("query",),
+    "read_page": ("url", "max_chars"),
+    "read_video": ("url", "max_chars"),
+}
 
 UNKNOWN_TOOL_TEXT = "error: no tool named {name!r}. Only search, read_page and read_video exist."
 BAD_ARGS_TEXT = "error: the arguments for {name!r} were not valid JSON. Call it again."
@@ -111,22 +122,33 @@ CHARS_LIMIT_TEXT = (
     "tools; answer with what you have."
 )
 TRUNCATED_NOTE = "\n\n[result truncated: tool output limit reached]"
+FETCH_TRUNCATED_NOTE = "\n\n[truncated: the text was longer than the limit]"
 FAILED_TEXT = "error: the tool call failed ({kind}). Try something else or answer without it."
+SEARCH_PROMPT = (
+    "Search the web for the question below. Using only what you find, reply with at most "
+    "10 short bullet facts, each with the URL of its source. Do not add commentary.\n\n"
+    "Question: {query}"
+)
+# Thinking off for the search sub-call: with it on, the reasoning can eat the whole
+# max_tokens and the reply comes back with sources but no text (seen 2026-11-15).
+SEARCH_MAX_TOKENS = 3000
 
 
 # --------------------------------------------------------------------------- #
 # pure helpers
 # --------------------------------------------------------------------------- #
-def inject_args(args, guild_id, allow_domains):
-    """The arguments actually sent to the tools container.
+def schemas_for(search_on: bool):
+    """The tool schemas a question may use: both readers, plus search when it is on."""
+    schemas = [READ_PAGE_SCHEMA, READ_VIDEO_SCHEMA]
+    if search_on:
+        schemas.insert(0, SEARCH_SCHEMA)
+    return schemas
 
-    Whatever the model put in ``guild_id`` / ``allow_domains`` is dropped first: those
-    two are the bot's, not the model's (see tools/README.md).
-    """
-    clean = {k: v for k, v in (args or {}).items() if k not in INJECTED_KEYS}
-    clean["guild_id"] = str(guild_id)
-    clean["allow_domains"] = "any" if allow_domains is None else allow_domains
-    return clean
+
+def clean_args(name, args):
+    """Drop every argument the tool's schema does not define (incl. old injected keys)."""
+    allowed = SCHEMA_ARGS.get(name, ())
+    return {k: v for k, v in (args or {}).items() if k in allowed and v is not None}
 
 
 def wrap_untrusted(kind, name, text):
@@ -134,11 +156,32 @@ def wrap_untrusted(kind, name, text):
     return f"=== {kind}: {name} ===\n{(text or '').strip()}\n=== end {kind} ==="
 
 
-def result_text(result):
-    """Join the text parts of an MCP ``CallToolResult``."""
-    parts = [getattr(item, "text", None) for item in (getattr(result, "content", None) or [])]
-    text = "\n".join(p for p in parts if p).strip()
-    return text or "error: the tool returned nothing"
+def search_text(data):
+    """The model-readable text of a DeepSeek search response: answer + source list."""
+    texts, sources, seen = [], [], set()
+    for block in data.get("content") or []:
+        if not isinstance(block, dict):
+            continue
+        if block.get("type") == "text":
+            text = block.get("text")
+            if isinstance(text, str) and text.strip():
+                texts.append(text.strip())
+        elif block.get("type") == "web_search_tool_result":
+            for result in block.get("content") or []:
+                if not isinstance(result, dict):
+                    continue
+                url = result.get("url")
+                if not url or url in seen:
+                    continue
+                seen.add(url)
+                sources.append((result.get("title") or url, url))
+                if len(sources) >= MAX_SOURCES:
+                    break
+    body = "\n\n".join(texts)
+    if sources:
+        listing = "\n".join(f"- {title} — {url}" for title, url in sources)
+        body = (body + "\n\n" if body else "") + "Sources:\n" + listing
+    return body or "error: search returned nothing"
 
 
 def _tool_calls(message):
@@ -164,51 +207,96 @@ def _tool_calls(message):
 
 
 # --------------------------------------------------------------------------- #
-# MCP client
+# the tools
 # --------------------------------------------------------------------------- #
-class ToolsClient:
-    """One streamable-HTTP session per call; the tools server is stateless."""
+class Tools:
+    """The three read-only tools: pages and videos via the fetcher, search via DeepSeek.
 
-    def __init__(self, url, timeout=120):
-        self.url = url
-        self.timeout = timeout
+    ``fetcher`` is the bot's existing internal-network ``httpx.AsyncClient``
+    (``trust_env=False``). The search client is separate and *does* use the environment's
+    proxy (``HTTPS_PROXY``) to reach ``api.deepseek.com``; the API key never leaves this
+    object, is only sent in the request header and is never logged.
+    """
 
-    async def call(self, name, args, guild_id, allow_domains) -> str:
+    def __init__(self, fetcher, api_key, model, search_client=None, timeout=SEARCH_TIMEOUT):
+        self.fetcher = fetcher
+        self.model = model
+        self._api_key = api_key
+        self._timeout = timeout
+        self._search_client = search_client
+
+    def _client(self):
+        if self._search_client is None:
+            # Trust the environment: the bot container leaves through the egress proxy.
+            self._search_client = httpx.AsyncClient(trust_env=True, timeout=self._timeout)
+        return self._search_client
+
+    async def call(self, name, args) -> str:
         if name not in ALLOWED_TOOLS:
             return UNKNOWN_TOOL_TEXT.format(name=name)
-        return await self._send(name, inject_args(args, guild_id, allow_domains))
+        clean = clean_args(name, args)
+        if name == "search":
+            return await self.search(clean.get("query") or "")
+        return await self._read(name, clean)
 
-    async def _send(self, name, payload) -> str:
-        # Imported lazily so the pure logic above (and its tests) needs no MCP SDK.
-        from mcp import ClientSession
-        from mcp.client.streamable_http import streamablehttp_client
+    async def _read(self, name, args) -> str:
+        response = await self.fetcher.post(
+            "/url" if name == "read_page" else "/video", json=args
+        )
+        data = response.json() if response.content else {}
+        if not isinstance(data, dict) or not data.get("ok"):
+            error = data.get("error") if isinstance(data, dict) else None
+            return f"error: {error or 'the tool returned nothing'}"
+        title = str(data.get("title") or "").strip()
+        text = str(data.get("text") or "").strip()
+        out = f"{title}\n\n{text}" if title else text
+        if data.get("truncated"):
+            out += FETCH_TRUNCATED_NOTE
+        return out
 
-        async with streamablehttp_client(self.url, timeout=self.timeout) as (read, write, _):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                result = await session.call_tool(name, payload)
-        return result_text(result)
+    async def search(self, query: str) -> str:
+        payload = {
+            "model": self.model,
+            "max_tokens": SEARCH_MAX_TOKENS,
+            "thinking": {"type": "disabled"},
+            "tools": [{
+                "type": "web_search_20250305",
+                "name": "web_search",
+                "max_uses": SEARCH_MAX_USES,
+            }],
+            "messages": [{"role": "user", "content": SEARCH_PROMPT.format(query=query)}],
+        }
+        headers = {
+            "x-api-key": self._api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        }
+        response = await self._client().post(SEARCH_URL, json=payload, headers=headers)
+        if response.status_code != 200:
+            return f"error: search failed (HTTP {response.status_code})"
+        return search_text(response.json())
 
 
 # --------------------------------------------------------------------------- #
 # the loop
 # --------------------------------------------------------------------------- #
-async def run_tool_loop(ask, messages, tools_client, charge, guild_id, allow_domains,
+async def run_tool_loop(ask, messages, tools, tool_schemas, charge,
                         max_calls=MAX_CALLS, max_chars=MAX_CHARS):
-    """Let the model call the three tools, capped, then ask once more for an answer.
+    """Let the model call its tools, capped, then ask once more for an answer.
 
     ``ask(messages, tools)`` calls the model and returns its message (``content`` and
-    ``tool_calls``); ``tools`` is None on the final, tool-less call. ``charge()`` returns
-    False when the guild's or the person's lookup budget is gone. Returns the final
-    answer text.
+    ``tool_calls``); ``tools`` is None on the final, tool-less call. ``tool_schemas`` is
+    this question's tool list (``schemas_for``). ``charge()`` returns False when the
+    guild's or the person's lookup budget is gone. Returns the final answer text.
     """
     convo = list(messages)
+    available = {s["function"]["name"] for s in tool_schemas}
     calls_used = 0
     chars_used = 0
     stop = False
 
     for _ in range(max_calls + MAX_ROUNDS_PAD):
-        message = await ask(convo, TOOL_SCHEMAS)
+        message = await ask(convo, tool_schemas)
         calls = _tool_calls(message)
         if not calls:
             return getattr(message, "content", "") or ""
@@ -229,7 +317,7 @@ async def run_tool_loop(ask, messages, tools_client, charge, guild_id, allow_dom
 
         for call in calls:
             executed = False
-            if call["name"] not in ALLOWED_TOOLS:
+            if call["name"] not in available:
                 text = UNKNOWN_TOOL_TEXT.format(name=call["name"])
             elif call["args"] is None:
                 text = BAD_ARGS_TEXT.format(name=call["name"])
@@ -242,9 +330,7 @@ async def run_tool_loop(ask, messages, tools_client, charge, guild_id, allow_dom
             else:
                 calls_used += 1
                 try:
-                    text = await tools_client.call(
-                        call["name"], call["args"], guild_id, allow_domains
-                    ) or ""
+                    text = await tools.call(call["name"], call["args"]) or ""
                 except Exception as e:  # a broken tool must not break the answer
                     text = FAILED_TEXT.format(kind=type(e).__name__)
                 room = max_chars - chars_used
@@ -255,7 +341,7 @@ async def run_tool_loop(ask, messages, tools_client, charge, guild_id, allow_dom
                 else:
                     chars_used += len(text)
                 executed = True
-            # Server output is external data (wrapped); our own limit/error notes are not.
+            # Tool output is external data (wrapped); our own limit/error notes are not.
             convo.append({
                 "role": "tool",
                 "tool_call_id": call["id"],

@@ -991,7 +991,7 @@ async def forever(jobs):
              f"proxy={env('HTTPS_PROXY')}")
     for guild_id, cfg in sorted(jobs.store.configs.items()):
         slots = ", ".join(f"{n}@{h:02d}:{m:02d}" for n, (h, m) in schedule_for(cfg)) or "nothing"
-        jobs.log(f"guild {guild_id} ({cfg.name}, {cfg.trust}): {slots}")
+        jobs.log(f"guild {guild_id} ({cfg.name}): {slots}")
     while True:
         await jobs.tick()
         await asyncio.sleep(TICK)

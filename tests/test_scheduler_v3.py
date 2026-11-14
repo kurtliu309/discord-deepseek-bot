@@ -34,7 +34,6 @@ def at(day, hour, minute=1):
 def recap_cfg(name="A", hour="22:00", channel=100, consent=True, skip=()):
     return GuildConfig(
         name=name,
-        trust="owner",
         consent=consent,
         recap_skip_channels=list(skip),
         features={"recap": {"on": True, "channel": channel, "time": hour}},
@@ -300,8 +299,7 @@ class TestTopicsFeeds(SchedulerCase):
     def topics_cfg(self, feeds):
         return GuildConfig(
             name="T",
-            trust="owner",
-            consent=True,
+                consent=True,
             features={"topics": {"on": True, "channel": 300, "time": "09:00", "count": 3, "feeds": feeds}},
         )
 
@@ -324,7 +322,7 @@ class TestTopicsFeeds(SchedulerCase):
 
     def test_default_feeds_match_the_v2_list(self):
         cfg = GuildConfig(
-            name="T", trust="owner", consent=True,
+            name="T", consent=True,
             features={"topics": {"on": True, "channel": 300}},
         )
         jobs = self.make_jobs({GUILD_A: cfg})
@@ -350,28 +348,12 @@ class TestTopicsFeeds(SchedulerCase):
 class TestTopicSlots(SchedulerCase):
     def test_prefetch_refetch_and_topics_follow_the_configured_time(self):
         cfg = GuildConfig(
-            name="T", trust="owner", consent=True,
+            name="T", consent=True,
             features={"topics": {"on": True, "channel": 300, "time": "09:00"}})
         self.assertEqual(
             scheduler.schedule_for(cfg),
             [("prefetch", (8, 0)), ("refetch", (8, 30)), ("topics", (9, 0))],
         )
-
-    def test_public_guild_cannot_enable_a_feature_above_its_trust(self):
-        # topics is public in the registry; tools is owner-only. A public guild asking for
-        # tools must still get nothing scheduled (registry ceiling, not a config value).
-        cfg = GuildConfig(
-            name="P", trust="public", consent=True,
-            features={"recap": {"on": True, "channel": 100, "time": "22:00"}})
-        self.assertEqual(scheduler.schedule_for(cfg), [("recap", (22, 0))])
-        self.assertFalse(any(name == "tools" for name, _ in scheduler.schedule_for(cfg)))
-
-
-# ---------------------------------------------------------------- channel guard
-#
-# A configured channel id can point at another server's channel (copied during a
-# migration). Nothing may be posted there, the owner gets one DM per channel, and the
-# day is not recorded as sent.
 
 
 def news_item(n):
@@ -394,7 +376,6 @@ class PostingGuardCase(SchedulerCase):
     def news_cfg(self, channel=400):
         return GuildConfig(
             name="N",
-            trust="public",
             language="en",
             features={"news": {"on": True, "channel": channel, "time": "09:00", "items": 2}},
         )
@@ -521,7 +502,7 @@ class TestPostingGuard(PostingGuardCase):
 
     def test_withheld_topics_keeps_the_material(self):
         cfg = GuildConfig(
-            name="T", trust="owner", consent=True,
+            name="T", consent=True,
             features={"topics": {"on": True, "channel": 300, "time": "09:00", "count": 2}},
         )
         discord = FakeDiscord(foreign={300: GUILD_B})

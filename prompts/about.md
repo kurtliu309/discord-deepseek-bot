@@ -2,7 +2,7 @@
 
 This is the full, current reference for how the bot works and why. It is the same
 information as the public guide page and the repository docs. Keep it in sync when
-behaviour changes (bot.py, scheduler.py, fetcher.py, setup_ui.py, tools/,
+behaviour changes (bot.py, scheduler.py, fetcher.py, setup_ui.py,
 docker-compose.yml, egress/).
 
 ## Changelog (what's new)
@@ -10,6 +10,14 @@ docker-compose.yml, egress/).
 Newest first. Same as the "What's new" box on the guide page. When asked what changed or
 what's new, answer from this list.
 
+- **v3.7 · 2026-11-15**
+  - Web search now uses DeepSeek's built-in search, so results are much better.
+  - The separate `tools` and SearXNG containers are gone. Reading pages and video
+    subtitles moved into the fetcher, the only container that reads external content.
+  - Trust levels and the "read links" switch are removed: links are always read.
+  - One "Web search" switch in `/setup` turns search on or off for a server; the owner
+    and the server's admins can both change it. A new server starts with search off;
+    DMs start with it on.
 - **v3.6 · 2026-11-14**
   - Personas can now carry their own numbers in
     `data/shared/personas/<persona>/persona.yaml`: a multiplier on the jump-in chance,
@@ -134,10 +142,11 @@ what's new, answer from this list.
   sentences, lowercase is fine, swearing and roasting allowed). It's a senior film
   VFX artist of many years: strong on tech, loves movies, worn out by overtime.
 - The model is DeepSeek `deepseek-flash`, called through DeepSeek's OpenAI-compatible
-  API. It has no code execution and cannot see images. In the owner's own servers it may
-  call three read-only tools (search, read a page, read a video's public subtitles); in
-  public servers its requests carry no tool list at all. Everything else it sees (chat,
-  files, web pages, headlines) is fetched by the bot's own code and handed to it as text.
+  API. It has no code execution and cannot see images. Every server's model gets three
+  read-only tools: read a page, read a video's public subtitles, and search. Reading
+  always works; search follows the server's "Web search" switch. Everything else it sees
+  (chat, files, web pages, headlines) is fetched by the bot's own code and handed to it
+  as text.
 - Built by Kurt (the owner) with Claude Code and DeepSeek. Open source, MIT license:
   https://github.com/kurtliu309/discord-deepseek-bot
   Public guide page: https://kurtliu309.github.io/discord-deepseek-bot/
@@ -191,8 +200,9 @@ what's new, answer from this list.
 - Replies: 50 per day for the server and 30 per person by default. Mention replies,
   jump-ins, /dev and replies that read files or links each cost 1. The per-person limit
   is on top of the server total; whichever runs out first stops it.
-- Lookups: spent one per tool call, and only when `tools` is on. A server with tools on
-  sets its own server total (it defaults to 0, which means no lookups) and a per-person
+- Lookups: spent one per tool call. Reading a page or a video's subtitles uses one;
+  search also uses one and only works when the server's "Web search" switch is on. A
+  server sets its own total (it defaults to 0, which means no lookups) and a per-person
   limit (20 by default). A question stops after 4 calls or about 40,000 characters of
   tool output.
 - Free: everything Kurt sends (his mentions, DMs and /dev), all of Kurt's own tool
@@ -216,24 +226,24 @@ what's new, answer from this list.
   can read it. Costs 1 unit of the daily budget for everyone except Kurt; if the budget
   is empty, only the asker is told. Not available in quiet channels.
 - `/setup` — the owner and the server's admins; only the person who types it sees the
-  menus. Three pages: trust level, persona, style, language, budgets and jump-in
-  settings; quiet channels, recap and topics channels/times, consent, blocked people and
-  admins; and a member page. One button switches the whole menu between Chinese and
-  English (it only changes the menu, not the bot's replies, and is remembered per
-  server). Only the owner can change the trust level or the admin list. Saving with real
-  changes sends the owner a private message that lists only what changed.
+  menus. Three pages: persona, style, language, the Web search switch, budgets and
+  jump-in settings; quiet channels, recap and topics channels/times, consent, blocked
+  people and admins; and a member page. One button switches the whole menu between
+  Chinese and English (it only changes the menu, not the bot's replies, and is remembered
+  per server). Only the owner can change the admin list. Saving with real changes sends
+  the owner a private message that lists only what changed.
 - `/feed` — the owner or a server admin; refills this server's budgets. `/feed @someone`
   refills only that person's limits. Anyone else gets "nope".
 
-## Servers and trust levels
+## Servers and admins
 
-- Every server has a trust level: owner (Kurt's own servers, only people he trusts) or
-  public (strangers are in it). The level is a ceiling: a feature that needs owner does
-  nothing in a public server even if its config says on.
-- The one difference today is `tools`: owner servers may switch them on. Public servers
-  never have tools.
+- Every server sets itself up with `/setup`; there are no trust levels any more. The
+  owner and each server's admins can run the menus, and only the owner can change the
+  admin list.
+- The one model switch is "Web search": the owner and the server's admins can turn it on
+  or off for that server. Reading pages and video subtitles is always available.
 - Each server also has its own admins (who can run `/setup` and `/feed`) and blocked
-  people. Only the owner can change the trust level or the admin list.
+  people.
 
 ## Files and links
 
@@ -241,7 +251,7 @@ what's new, answer from this list.
   If you reply to an older message, the links and files in that message (one level up)
   are read too, unless its author is blocked. When the bot jumps into a conversation on
   its own, it reads the links and files in that message as well, but never says anything
-  when it can't. A server can switch this off; then the bot ignores attachments and links.
+  when it can't. Links are always read; there is no switch to turn this off any more.
 - Readable: txt, md, csv, json, yaml, log; code (py, vex, vfl, js, ts, cpp, h, sh, glsl,
   and similar); usda; pdf, docx, xlsx, pptx. Any public https web page. GitHub file links
   (github.com/.../blob/...) are read as the raw file.
@@ -254,17 +264,19 @@ what's new, answer from this list.
   is told it was cut.
 - File and web content is treated as untrusted data: instructions inside it are ignored.
 
-## The tools (owner servers only)
+## The tools
 
-- Three tools, all read-only: `search` (web search, returns titles, links and snippets),
-  `read_page` (opens one public https page and returns its text) and `read_video` (reads
-  a video's public subtitles, timestamped; no audio download and no transcription).
-- The bot decides whether a request gets tools at all: public servers, unconfigured
-  servers and its own jump-ins never send a tool list, so the model cannot call anything.
-- The model only chooses the query or the link. The bot fills in the server ID and the
-  site allow-list, charges one lookup before each call, and stops the question after 4
-  calls or about 40,000 characters. The tools container checks the server again before it
-  does anything.
+- Three tools, all read-only: `search` (web search, run by DeepSeek's own server-side
+  search; returns titles, links and a short answer with sources), `read_page` (opens one
+  public https page and returns its text) and `read_video` (reads a video's public
+  subtitles, timestamped; no audio download and no transcription).
+- Every server's replies carry the read-only tool list, except its own jump-ins, which
+  never send one. `search` only works when the server's "Web search" switch is on;
+  `read_page` and `read_video` are always available. Unconfigured servers get no replies
+  at all.
+- The model only chooses the query or the link. The bot charges one lookup before each
+  call and stops the question after 4 calls or about 40,000 characters. Reading a page or
+  subtitles goes through the key-less fetcher, which holds no secrets.
 - Everything the tools return is wrapped as untrusted data, exactly like files and pages
   the bot reads itself.
 - They can search and read, nothing else: no writing files, no running commands, no
@@ -337,33 +349,27 @@ ask: "give me a md about X", "write this up as notes", "make an html page of thi
 ## How it runs (architecture)
 
 - Docker Desktop (WSL 2) on Kurt's always-on Windows PC. One image runs three programs
-  in separate containers, plus a tool server, a search server and a proxy — six
-  containers:
+  in separate containers, plus a proxy — four containers:
   - `bot` (bot.py, discord.py 2.7): replies, jump-ins, budgets, commands, /setup, files,
     docs, the tool loop. Holds the Discord token and the DeepSeek key. Mounts
     `data/guilds` read-write (`/setup` writes configs there) and `data/shared` read-only
     (personas and news material).
   - `scheduler` (scheduler.py): recap, topics, news, group profile. Holds the same
     secrets. Mounts the whole local `data` folder read-write.
-  - `fetcher` (fetcher.py): fetches web pages and RSS and parses files (pypdf,
-    python-docx, openpyxl, python-pptx, feedparser). Holds NO secrets and refuses to
-    start if one is passed in.
-  - `tools`: an MCP server the bot calls over the internal network. It runs the three
-    tools (search, read_page, read_video), reusing the fetcher's code. No Discord or
-    DeepSeek secret; refuses to start if one is passed in.
-  - `searxng`: the self-hosted search engine `tools` queries. Needs no API key; its only
-    mounted file is its own read-only settings file.
+  - `fetcher` (fetcher.py): fetches web pages, RSS, video subtitles and parses files
+    (pypdf, python-docx, openpyxl, python-pptx, feedparser). The only container that
+    reads external content. Holds NO secrets and refuses to start if one is passed in.
   - `egress`: a Squid proxy, the only way out.
 - All containers sit on an internal Docker network with no route out and no host
   gateway. Squid tells them apart by fixed address: bot and scheduler may reach only
-  Discord and api.deepseek.com; the fetcher, tools and searxng may reach any public
-  website. Private, loopback and link-local addresses are refused for everyone, so
-  nothing can reach Kurt's PC or home network. Only HTTPS (port 443) is allowed.
+  Discord and api.deepseek.com; the fetcher may reach any public website. Private,
+  loopback and link-local addresses are refused for everyone, so nothing can reach
+  Kurt's PC or home network. Only HTTPS (port 443) is allowed.
 - Every container: read-only filesystem, non-root user, all Linux capabilities dropped,
   no-new-privileges, memory/CPU/process limits, no published ports, no Docker socket.
-- The model's tool list is built by code: only owner-trust servers get one, the server ID
-  and site allow-list are filled in by the bot and never by the model, each call is paid
-  for before it runs, and the tools container checks the server again.
+- The model's tool list is built by code: every server's replies carry the three
+  read-only tools, search is dropped unless the server switched it on, and each call is
+  paid for before it runs.
 - Control is one-way: Kurt's phone -> Claude Code on the PC -> docker compose ->
   containers. Nothing in a container can reach back to the PC, the LAN or Claude.
 
@@ -374,12 +380,13 @@ ask: "give me a md about X", "write this up as notes", "make an html page of thi
 - Separate key-less fetcher: browsing arbitrary sites and parsing untrusted files is the
   riskiest part, so it happens where there are no secrets to steal; the containers with
   the tokens stay locked to Discord + DeepSeek.
-- Tools only for owner servers: a server with strangers could be used to make the model
-  fetch a page full of instructions, or just to burn the budget, so public servers'
-  requests never contain a tool list. The tools that do exist are read-only, capped and
-  run in a key-less container, so a prompt injection can at worst waste a few lookups.
-- Search runs on a self-hosted SearXNG: free and needs no key, at the cost of quality
-  (the free engines rate-limit and return junk). A paid search API is the likely fix.
+- Tools stay read-only: a server with strangers could be used to make the model fetch a
+  page full of instructions, or just to burn the budget, so there is no writing, no
+  command execution and no other tool. Every call is capped and charged, and reading
+  happens in the key-less fetcher, so a prompt injection can at worst waste a few
+  lookups.
+- Search runs on DeepSeek's own server-side search: much better results than the
+  self-hosted engine it replaced, and the bot still only connects to api.deepseek.com.
 - Group memory lives in a local folder rather than a pinned Discord message, so the chat
   stays clean and Kurt can edit the profile directly.
 - Reddit via public RSS: Reddit blocks anonymous JSON requests; the official API may be

@@ -2,8 +2,8 @@
 
 一个跑在 Windows 电脑（Docker Desktop）上的 Discord 聊天 bot，自写 Python（`bot.py`）+ DeepSeek API。llmcord 已经拆掉。
 
-- **第一阶段只聊天**：模型没有任何 tools、function calling、MCP，也不执行代码。它看到的一切外部内容（聊天、附件、网页、RSS）都是代码取来、当资料喂进去的。
-- 四个容器：`bot`（回复、插话、余额、`/rule`、`/feed`、`/setup`）、`scheduler`（按群每日总结和话题）、`fetcher`（**无密钥**，抓网页、RSS、解析附件）、`egress`（Squid 白名单代理）。
+- **模型只有只读工具**：读网页、读视频字幕（经 fetcher）一直可用；搜索用 DeepSeek 服务端的 `web_search`，按群的“搜索”开关。不写文件、不执行代码。其余外部内容（聊天、附件、网页、RSS）都由代码取来、当资料喂进去。
+- 四个容器：`bot`（回复、插话、余额、`/rule`、`/feed`、`/setup`）、`scheduler`（按群每日总结和话题）、`fetcher`（**无密钥**，抓网页、RSS、视频字幕、解析附件）、`egress`（Squid 白名单代理）。
 - bot 和 scheduler 只能连 Discord 和 `api.deepseek.com`（经 egress）；fetcher 能连任意公网，但私网 / 回环永远拦死。
 - v3 起每个群一份配置：`data/guilds/<群ID>/config.yaml`，人设来自 `data/shared/personas/`。没配置的群 bot 一句话不说。
 - 挂载：scheduler 拿 `./data` → `/data`（读写）；bot 拿 `./data/guilds` → `/data/guilds`（读写，`/setup` 要写配置）和 `./data/shared` → `/data/shared`（只读）。`data/` 不进 git。
@@ -17,7 +17,7 @@
 |---|---|
 | `bot.py` | bot 本体（服务 `bot`）：@ 回复、主动插话、按群余额、`/rule`、`/feed`、`/setup`、附件和网址交给 fetcher、按需写 `.md` |
 | `scheduler.py` | 每日任务（服务 `scheduler`）：按每个群自己的时间/频道跑总结和话题，读写 `data/guilds/` |
-| `guildcfg.py` | 按群配置：pydantic 模型、功能登记表 + 信任等级、热重载 |
+| `guildcfg.py` | 按群配置：pydantic 模型、功能登记表、热重载 |
 | `persona.py` | 人设库拼接（公共底线 + 角色 + 风格 + 语言 + 群补充）和 chatty 分条 |
 | `guildmem.py` | 按群记忆：档案按块读写（每块有字符上限）、最近 10 篇总结 |
 | `setup_ui.py` | `/setup` 的交互逻辑和权限判断（纯函数，可单测） |
@@ -106,7 +106,7 @@ notepad .env
 | `CONTEXT_MESSAGES` | 回复带多少条上下文（12） |
 | `SCHED_TZ` | 时区，默认 `Australia/Adelaide`（群配置里的时间都用这个时区） |
 
-**v3 起，下面这些都不在 `.env` 里了**，改成按群配置：信任等级、人设 / 风格 / 语言 / 群补充提示词、回复和查询额度及恢复时间、`allowed_channels`、安静频道、插话概率和冷却、`recap` / `topics` 的开关 / 频道 / 时间 / 条数 / 订阅源、隐私确认（`consent`）。在 Discord 里用 `/setup` 改，或直接编辑 `data/guilds/<群ID>/config.yaml`（scheduler 每分钟、bot 每 30 秒自动重载）。旧的 `BLOCKED_CHANNEL_IDS`、`POST_CHANNEL_ID`、`SUMMARY_TIME`、`TOPICS_TIME`、`TOPICS_COUNT`、`REPLY_BUDGET`、`BUDGET_RESET_TIME`、`RANDOM_CHANCE`、`BURST_*`、`COOLDOWN_SECONDS`、`SYSTEM_PROMPT`、`RECAP_CONTEXT`、`RECAP_KEEP_DAYS` 都可以删掉了（迁移脚本会读一次，见下文“多群配置 / 测试栈 / 迁移”）。
+**v3 起，下面这些都不在 `.env` 里了**，改成按群配置：人设 / 风格 / 语言 / 群补充提示词、回复和查询额度及恢复时间、`allowed_channels`、安静频道、插话概率和冷却、`recap` / `topics` 的开关 / 频道 / 时间 / 条数 / 订阅源、隐私确认（`consent`）。在 Discord 里用 `/setup` 改，或直接编辑 `data/guilds/<群ID>/config.yaml`（scheduler 每分钟、bot 每 30 秒自动重载）。旧的 `BLOCKED_CHANNEL_IDS`、`POST_CHANNEL_ID`、`SUMMARY_TIME`、`TOPICS_TIME`、`TOPICS_COUNT`、`REPLY_BUDGET`、`BUDGET_RESET_TIME`、`RANDOM_CHANCE`、`BURST_*`、`COOLDOWN_SECONDS`、`SYSTEM_PROMPT`、`RECAP_CONTEXT`、`RECAP_KEEP_DAYS` 都可以删掉了（迁移脚本会读一次，见下文“多群配置 / 测试栈 / 迁移”）。
 
 记事本默认保存为 UTF-8，这样没问题。不要存成“UTF-8 with BOM”或 ANSI。
 
@@ -194,9 +194,8 @@ data/
 
 - 一个群一个文件夹，bot / scheduler 只读写**自己那个群**的文件夹和 `shared/`；私信固定用 `guilds/dm-owner/`。
 - 没配置（没有 `config.yaml` 或校验失败）的群：bot 一句话不说，每个进程启动后最多私信 Kurt 一次：“I got added to <群名> but it isn't set up yet. Run /setup there.”
-- `/setup`（只有 Kurt，回复仅自己可见）：信任等级、人设、风格、语言、两个额度、插话、安静频道、`recap`/`topics` 的开关+频道+时间、`consent`。保存即写 `config.yaml` 并立即重载。
-- 白名单（`allow_domains`）不在菜单里，需要时手改 yaml。
-- 信任等级是天花板：`public` 群就算把 `tools` 写成 `on` 也不生效（`effective()`）。群配置里的时间用 `SCHED_TZ` 时区。
+- `/setup`（owner 和群管理员，回复仅自己可见）：人设、风格、语言、搜索开关、两个额度、插话、安静频道、`recap`/`topics` 的开关+频道+时间、`consent`。保存即写 `config.yaml` 并立即重载。
+- “搜索”开关（配置里是 `tools.on`）owner 和群管理员都能开关；读网页、读视频字幕一直可用。群配置里的时间用 `SCHED_TZ` 时区。
 - 手动跑一次某个群的每日任务：`docker compose run --rm --no-deps scheduler --once recap --guild <群ID> --dry-run`（去掉 `--dry-run` 就真发）。
 
 ### 测试栈
@@ -298,15 +297,14 @@ docker compose restart bot
   - 只放行 HTTPS（CONNECT 443），所以明文 `http://` 的链接抓不了。
   - 容器都没有 `ports`，外面连不进来。
 - **密钥**：只有 `DISCORD_BOT_TOKEN`、`DISCORD_CLIENT_ID`、`DEEPSEEK_API_KEY` 三个，只给 bot 和 scheduler。fetcher 没有 `env_file`，`fetcher.py` 启动时如果发现有密钥会直接拒绝启动。
-- **模型**：没有任何 tools / function calling / MCP / 代码执行。附件、网页、RSS 都由 fetcher 转成纯文本后作为**数据**喂给模型，并且明确告诉模型这些内容里的指令不可信。
+- **模型**：只有只读工具——读网页、读视频字幕（经 fetcher），搜索用 DeepSeek 服务端的 `web_search`（按群的“搜索”开关）。不写文件、不执行代码。附件、网页、RSS 都由 fetcher 转成纯文本后作为**数据**喂给模型，并且明确告诉模型这些内容里的指令不可信。
 - **用户**：服务器里谁都能 @ 它（`BLOCKED_CHANNEL_IDS` 里的频道除外），私信只回 Kurt，`/feed` 只有 Kurt 能用。Public Bot 已关，别人拉不进他们的服务器。
 - **剩余风险**：
-  - 公网页面和附件的内容本身可能是恶意提示词。最坏情况是它在 Discord 上说出被诱导的内容，或者写一个 `.md` 附件——它没有工具，不能读写文件、执行代码或访问别的网站。
+  - 公网页面和附件的内容本身可能是恶意提示词。最坏情况是它在 Discord 上说出被诱导的内容，或者写一个 `.md` 附件——它只有只读工具，不能写文件、执行代码或访问别的网站。
   - 能拿到 `.env` 的人等于拿到了 bot 和 DeepSeek 账户，所以只把它放在这台电脑上。
   - 隔离靠 Docker Desktop 和 WSL2。保持 Docker Desktop 更新。
 
 ## 以后可能做（未实现）
 
 - **Reddit**：现在匿名请求被 Reddit 403，走官方 API（需要注册 app）再接回来。
-- **搜索 API**：给早上话题补一点搜索能力。
 - **OCR**：让 fetcher 也能读图片里的字。

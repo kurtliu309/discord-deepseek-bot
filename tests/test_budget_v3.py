@@ -364,7 +364,7 @@ class FakeModalInteraction:
 class TestSetupPerPersonFields(unittest.IsolatedAsyncioTestCase):
     def _view(self, tmp):
         store = g.GuildConfigStore(tmp)
-        base = g.GuildConfig(name="New server", trust=g.Trust.OWNER)
+        base = g.GuildConfig(name="New server")
         store.save("111", base)
         return store, setup_ui.SetupView(
             guild=FakeGuild(),

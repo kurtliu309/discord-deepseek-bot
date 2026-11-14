@@ -2,21 +2,19 @@
 """``/setup``: the owner-or-admin, ephemeral settings UI for one guild (Chinese / English).
 
 The owner can change everything; a guild admin can change everything except the
-trust level and the admin list (enforced here on save, not just hidden in the UI).
-The Discord pieces (View / Select / Button / Modal) live at the bottom; everything
-above them is pure and unit-tested:
+admin list (enforced here on save, not just hidden in the UI). The Discord pieces
+(View / Select / Button / Modal) live at the bottom; everything above them is pure
+and unit-tested:
 
     permission_error(user_id, owner_id, has_manage_guild, lang, admins) -> None | error
     default_config(guild_name)                                 -> GuildConfig
     form_from_config(cfg) / apply_form(base, form, ...)        -> editable form / validated config
     config_diff(old, new) / change_notice(...)                 -> owner DM after a save
-    list_personas / list_styles / tools_available / tools_status
+    list_personas / list_styles
 
 Every user-facing string lives in ``TEXT``; ``t(lang, key, **kw)`` picks it out.
 The language is the guild's ``setup_language`` ("zh" unless switched), which is
 independent of ``language`` (the language the bot replies in).
-
-The whitelist (``allow_domains``) is intentionally not in the menu: hand-edit the YAML.
 """
 
 from __future__ import annotations
@@ -39,13 +37,11 @@ TEXT = {
     "zh": {
         "title": "**服务器设置**（仅你可见）",
         "guild_name": "群名：{name}",
-        "trust_line": "信任等级：{label}",
-        "trust_public": "公共群（有外人）",
-        "trust_owner": "自己的群（全部自己人）",
         "persona_line": "人设：{persona}　风格：{style}　语言：{language}",
         "budget_line": "额度：群每天 {replies} 条回复、每人 {replies_per_user} 条"
         "（查询：群 {lookups} 次、每人 {lookups_per_user} 次，v3.1 用）",
         "interject_line": "插话：{state}，概率 {chance}",
+        "search_line": "搜索：{state}　开了以后模型能自己上网搜索，每次搜索算一次查询",
         "quiet_line": "安静频道：{channels}",
         "recap_line": "回顾：{state}　{channel}　{time}",
         "topics_line": "话题：{state}　{channel}　{time}",
@@ -53,15 +49,12 @@ TEXT = {
         "consent_line": "隐私确认：{state}",
         "consent_yes": "已同意",
         "consent_no": "未同意",
-        "tools_line": "工具调用：{status}",
-        "tools_ok": "可用（owner 群）",
-        "tools_unavailable": "不可用（public 群不能开）",
         "page_hint": "第 1 页：基础设置　第 2 页：频道和定时（回顾、话题、新闻）　第 3 页：名单。"
         "点下面的页码切换，改完点「保存」生效。",
         "blocked_line": "黑名单：{names}",
         "admins_line": "管理员：{names}",
         "owner_only": "只有主人能改",
-        "owner_only_line": "信任等级和管理员名单只有主人能改。",
+        "owner_only_line": "管理员名单只有主人能改。",
         "select_blocked": "黑名单（不回复这些人的消息）",
         "select_admins": "管理员（可以改设置）",
         "dm_changed_header": "{guild} 的设置被 {user} 改了：",
@@ -72,13 +65,13 @@ TEXT = {
         "unset": "未设置",
         "gone": "（频道已不存在）",
         "join": "、",
-        "select_trust": "信任等级",
         "select_persona": "人设",
         "select_style": "打字风格",
         "select_language": "默认语言",
         "quiet_placeholder": "安静频道（可多选；我不会在这些频道说话）",
         "recap_placeholder": "回顾频道（当前：{channel}）",
         "topics_placeholder": "话题频道（当前：{channel}；话题和新闻都发这里）",
+        "btn_search": "搜索",
         "btn_budget": "每日额度",
         "btn_interject": "插话设置",
         "btn_save": "保存",
@@ -120,13 +113,12 @@ TEXT = {
     "en": {
         "title": "**Server setup** (only you can see this)",
         "guild_name": "Server: {name}",
-        "trust_line": "Trust level: {label}",
-        "trust_public": "Public server (outsiders present)",
-        "trust_owner": "Own server (everyone is trusted)",
         "persona_line": "Persona: {persona} · Style: {style} · Language: {language}",
         "budget_line": "Budget: {replies} replies per day for the server, {replies_per_user} "
         "per person (lookups: {lookups} for the server, {lookups_per_user} per person, used in v3.1)",
         "interject_line": "Interjections: {state}, chance {chance}",
+        "search_line": "Web search: {state} · when on, the model can search the web itself; "
+        "each search counts as one lookup",
         "quiet_line": "Quiet channels: {channels}",
         "recap_line": "Recap: {state} · {channel} · {time}",
         "topics_line": "Topics: {state} · {channel} · {time}",
@@ -134,15 +126,12 @@ TEXT = {
         "consent_line": "Privacy consent: {state}",
         "consent_yes": "given",
         "consent_no": "not given",
-        "tools_line": "Tool calls: {status}",
-        "tools_ok": "available (owner server)",
-        "tools_unavailable": "unavailable (public servers cannot enable it)",
         "page_hint": "Page 1: basics. Page 2: channels and schedules (recap, topics, news). "
         "Page 3: lists. Use the page buttons below to switch; press Save to apply.",
         "blocked_line": "Blocked: {names}",
         "admins_line": "Admins: {names}",
         "owner_only": "Only the owner can change this",
-        "owner_only_line": "Only the owner can change the trust level and the admin list.",
+        "owner_only_line": "Only the owner can change the admin list.",
         "select_blocked": "Blocked users (I won't reply to them)",
         "select_admins": "Admins (can change settings)",
         "dm_changed_header": "{guild}'s settings were changed by {user}:",
@@ -153,13 +142,13 @@ TEXT = {
         "unset": "not set",
         "gone": "(channel no longer exists)",
         "join": ", ",
-        "select_trust": "Trust level",
         "select_persona": "Persona",
         "select_style": "Writing style",
         "select_language": "Bot language",
         "quiet_placeholder": "Quiet channels (pick any; I won't talk in them)",
         "recap_placeholder": "Recap channel (now: {channel})",
         "topics_placeholder": "Topics channel (now: {channel}; topics and news both go here)",
+        "btn_search": "Web search",
         "btn_budget": "Daily budget",
         "btn_interject": "Interjections",
         "btn_save": "Save",
@@ -201,11 +190,6 @@ TEXT = {
     },
 }
 
-TRUST_KEYS = {
-    g.Trust.PUBLIC.value: "trust_public",
-    g.Trust.OWNER.value: "trust_owner",
-}
-
 LANGUAGE_CHOICES = [
     ("English", "en"),
     ("中文", "zh"),
@@ -233,11 +217,6 @@ def ui_language(lang) -> str:
 
 def other_language(lang) -> str:
     return "en" if ui_language(lang) == DEFAULT_LANGUAGE else DEFAULT_LANGUAGE
-
-
-def trust_label(lang: str, trust) -> str:
-    key = TRUST_KEYS.get(str(trust))
-    return t(lang, key) if key else str(trust)
 
 
 # --------------------------------------------------------------------------- #
@@ -274,7 +253,7 @@ def has_manage_guild(interaction) -> bool:
 
 
 def default_config(guild_name: str) -> g.GuildConfig:
-    """First /setup in an unconfigured guild: public, consent off, chat on."""
+    """First /setup in an unconfigured guild: consent off, chat on, search off."""
     return g.GuildConfig(name=guild_name or "")
 
 
@@ -301,19 +280,6 @@ def list_styles(personas_dir) -> list:
 
 def persona_exists(personas_dir, name: str) -> bool:
     return (Path(personas_dir) / (name or "") / persona.CHARACTER_FILE).is_file()
-
-
-def tools_available(trust) -> bool:
-    """Trust ceiling from the feature registry (tools need owner trust)."""
-    try:
-        level = trust if isinstance(trust, g.Trust) else g.Trust(str(trust).lower())
-    except ValueError:
-        return False
-    return level >= g.FEATURES["tools"].min_trust
-
-
-def tools_status(trust, lang: str = DEFAULT_LANGUAGE) -> str:
-    return t(lang, "tools_ok" if tools_available(trust) else "tools_unavailable")
 
 
 def parse_switch(value, lang: str = DEFAULT_LANGUAGE) -> bool:
@@ -363,7 +329,6 @@ def news_channel_error(form, lang: str = DEFAULT_LANGUAGE):
 class SetupForm:
     """The editable subset of one guild config shown in the menu."""
 
-    trust: str = g.Trust.PUBLIC.value
     persona: str = "tiredfx"
     style: str = "normal"
     language: str = "en"
@@ -373,6 +338,7 @@ class SetupForm:
     lookups_per_user: int = 20
     interject_on: bool = True
     interject_chance: float = 0.03
+    tools_on: bool = False  # the "search" switch
     quiet_channels: list = field(default_factory=list)
     recap_on: bool = False
     recap_channel: int | None = None
@@ -390,7 +356,6 @@ class SetupForm:
 
 def form_from_config(cfg: g.GuildConfig) -> SetupForm:
     return SetupForm(
-        trust=str(cfg.trust),
         persona=cfg.persona,
         style=cfg.style,
         language=cfg.language,
@@ -400,6 +365,7 @@ def form_from_config(cfg: g.GuildConfig) -> SetupForm:
         lookups_per_user=cfg.budget.lookups_per_user,
         interject_on=bool(cfg.features.interject.on),
         interject_chance=float(cfg.features.interject.chance),
+        tools_on=bool(cfg.features.tools.on),
         quiet_channels=list(cfg.quiet_channels),
         recap_on=bool(cfg.features.recap.on),
         recap_channel=cfg.features.recap.channel,
@@ -426,12 +392,12 @@ def apply_form(
 ) -> g.GuildConfig:
     """Merge the form into ``base`` (keeping fields the menu doesn't show) and validate.
 
-    Raises ``guildcfg.ConfigError`` on bad values. ``tools`` follows ``trust``:
-    on for owner servers, off for public ones (there is no separate switch).
+    Raises ``guildcfg.ConfigError`` on bad values. Anyone who may run /setup (the
+    owner or an admin) can flip the search switch.
 
-    Only the owner may change ``trust`` and ``admins``. The menu greys those out for
-    admins, but the values are forced back here too, so hiding the controls is not
-    the security boundary. The owner is never written into either name list.
+    Only the owner may change ``admins``. The menu greys the list out for admins,
+    but the value is forced back here too, so hiding the control is not the security
+    boundary. The owner is never written into either name list.
     """
     data = base.model_dump(mode="json")
     data["persona"] = form.persona
@@ -441,10 +407,8 @@ def apply_form(
     data["quiet_channels"] = [int(c) for c in form.quiet_channels]
     data["blocked_users"] = g.without_owner(form.blocked_users, owner_id)
     if is_owner:
-        data["trust"] = form.trust
         data["admins"] = g.without_owner(form.admins, owner_id)
     else:
-        data["trust"] = str(base.trust)
         data["admins"] = g.without_owner(base.admins, owner_id)
 
     data["budget"]["replies_per_day"] = int(form.replies_per_day)
@@ -455,6 +419,7 @@ def apply_form(
     interject = data["features"]["interject"]
     interject["on"] = bool(form.interject_on)
     interject["chance"] = float(form.interject_chance)
+    data["features"]["tools"]["on"] = bool(form.tools_on)
 
     for name, on, channel, time_value in (
         ("recap", form.recap_on, form.recap_channel, form.recap_time),
@@ -476,10 +441,6 @@ def apply_form(
     news["channel"] = int(form.topics_channel) if form.topics_channel is not None else None
     news["time"] = form.news_time
     news["items"] = int(form.news_items)
-
-    # Tools follow the trust level: the menu has no switch of its own, it only shows
-    # "available" for owner servers, so the saved file must match what it shows.
-    data["features"]["tools"]["on"] = tools_available(data["trust"])
 
     return g.parse_config(data)
 
@@ -643,8 +604,8 @@ class SetupView(discord.ui.View):
     on is disabled and primary, and the rest jump straight there with the form's
     unsaved edits intact.
 
-    ``is_owner`` gates the two owner-only controls (trust level and the admin
-    list): they are disabled for admins and forced back on save anyway.
+    ``is_owner`` gates the one owner-only control (the admin list): it is disabled
+    for admins and forced back on save anyway. The search switch is open to both.
     """
 
     def __init__(
@@ -772,12 +733,12 @@ class SetupView(discord.ui.View):
         lines = [
             t(lang, "title"),
             t(lang, "guild_name", name=self.guild.name if self.guild is not None else "?"),
-            t(lang, "trust_line", label=trust_label(lang, f.trust)),
             t(lang, "persona_line", persona=f.persona, style=f.style, language=f.language),
             t(lang, "budget_line", replies=f.replies_per_day,
               replies_per_user=f.replies_per_user, lookups=f.lookups_per_day,
               lookups_per_user=f.lookups_per_user),
             t(lang, "interject_line", state=flag(f.interject_on), chance=f"{f.interject_chance:.0%}"),
+            t(lang, "search_line", state=flag(f.tools_on)),
             t(lang, "quiet_line", channels=self._channel_names(f.quiet_channels)),
             t(lang, "recap_line", state=flag(f.recap_on),
               channel=self._channel_name(f.recap_channel), time=f.recap_time),
@@ -789,7 +750,6 @@ class SetupView(discord.ui.View):
             t(lang, "consent_line", state=t(lang, "consent_yes" if f.consent else "consent_no")),
             t(lang, "blocked_line", names=self._user_names(f.blocked_users)),
             t(lang, "admins_line", names=self._user_names(f.admins)),
-            t(lang, "tools_line", status=tools_status(f.trust, lang)),
         ]
         if not self.is_owner:
             lines.append(t(lang, "owner_only_line"))
@@ -859,20 +819,6 @@ class SetupView(discord.ui.View):
     def _page_one(self):
         f = self.form
         lang = self.setup_language
-        trust = discord.ui.Select(
-            placeholder=t(lang, "select_trust"),
-            row=0,
-            disabled=not self.is_owner,
-            options=[
-                discord.SelectOption(
-                    label=trust_label(lang, value), value=value, default=(value == f.trust)
-                )
-                for value in TRUST_KEYS
-            ],
-        )
-        trust.callback = self._on_trust
-        self.add_item(trust)
-
         persona_select = discord.ui.Select(
             placeholder=t(lang, "select_persona"),
             row=1,
@@ -898,6 +844,7 @@ class SetupView(discord.ui.View):
         self._add_buttons(
             3,
             (
+                ("btn_search", self._on_search, False),
                 ("btn_budget", self._on_budget, False),
                 ("btn_interject", self._on_interject, False),
                 ("btn_save", self._on_save, True),
@@ -1008,11 +955,9 @@ class SetupView(discord.ui.View):
 
     # -- select handlers ---------------------------------------------------- #
 
-    async def _on_trust(self, interaction):
-        if not self.is_owner:
-            await self._show(interaction)  # disabled in the UI; ignore a forced callback
-            return
-        self.form.trust = interaction.data["values"][0]
+    async def _on_search(self, interaction):
+        # The owner and guild admins alike may flip this one.
+        self.form.tools_on = not self.form.tools_on
         await self._show(interaction)
 
     async def _on_persona(self, interaction):
@@ -1107,8 +1052,7 @@ class SetupView(discord.ui.View):
             await interaction.response.send_message(t(lang, "err_save", error=e), ephemeral=True)
             return
         self.base = cfg
-        # an admin's forced-back owner-only fields should not look changed on screen
-        self.form.trust = str(cfg.trust)
+        # an admin's forced-back owner-only field should not look changed on screen
         self.form.admins = list(cfg.admins)
         self.form.blocked_users = list(cfg.blocked_users)
         await self._notify_change(old, cfg, interaction.user, lang)

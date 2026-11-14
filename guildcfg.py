@@ -2,9 +2,9 @@
 """Per-guild configuration for the v3 bot (see docs/notes/design-v3.md).
 
 One YAML file per guild: ``DATA/guilds/<guild id>/config.yaml``. Everything the bot
-or scheduler does in a guild is gated by that file: a per-feature switch, plus a
-trust ceiling. A feature written ``on`` still does nothing when the guild's trust
-level is below the feature's ``min_trust`` (``effective()``).
+or scheduler does in a guild is gated by that file: one switch per feature. A feature
+written ``on`` is live; off, or a guild with no config at all, does nothing
+(``effective()``).
 
 Pure config logic lives here; Discord wiring stays in bot.py / scheduler.py.
 
@@ -16,12 +16,11 @@ Pure config logic lives here; Discord wiring stays in bot.py / scheduler.py.
 
 from __future__ import annotations
 
-import enum
 import os
 import re
 import time
 from pathlib import Path
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional
 
 import yaml
 from pydantic import (
@@ -38,42 +37,6 @@ DM_GUILD_ID = "dm-owner"  # private messages get their own fixed "guild"
 
 TIME_RE = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")  # persona / style folder names
-
-
-# --------------------------------------------------------------------------- #
-# trust levels (ordered: add a level in _TRUST_ORDER, never special-case names)
-# --------------------------------------------------------------------------- #
-
-
-class Trust(str, enum.Enum):
-    PUBLIC = "public"
-    OWNER = "owner"
-
-    @property
-    def rank(self) -> int:
-        return _TRUST_ORDER.index(self)
-
-    def __lt__(self, other):
-        return self.rank < _rank(other)
-
-    def __le__(self, other):
-        return self.rank <= _rank(other)
-
-    def __gt__(self, other):
-        return self.rank > _rank(other)
-
-    def __ge__(self, other):
-        return self.rank >= _rank(other)
-
-    def __str__(self):
-        return self.value
-
-
-_TRUST_ORDER = (Trust.PUBLIC, Trust.OWNER)
-
-
-def _rank(value) -> int:
-    return value.rank if isinstance(value, Trust) else Trust(str(value).lower()).rank
 
 
 # --------------------------------------------------------------------------- #
@@ -111,7 +74,6 @@ OnOff = Annotated[bool, BeforeValidator(as_bool)]
 ChannelId = Annotated[int, BeforeValidator(as_int)]
 UserId = Annotated[int, BeforeValidator(as_int)]
 HHMM = Annotated[str, AfterValidator(check_hhmm)]
-AllowDomains = Union[Literal["any"], list[str]]
 
 # List fields that hold Discord user IDs. The owner is never written into these:
 # they are always blocked from being blocked and always an admin, in code.
@@ -161,15 +123,14 @@ class InterjectSettings(FeatureSettings):
         return value
 
 
-class ReadLinksSettings(FeatureSettings):
-    allow_domains: AllowDomains = "any"
-
-
 class ToolsSettings(FeatureSettings):
-    """v3.1, owner guilds only. The public-guild request carries no tool list at all."""
+    """v3.7: the "search" switch. On = the model may search the web itself.
+
+    The key stays ``tools`` so existing config files keep working; a guild without
+    the switch on sends no tool list at all (AGENTS.md rule, enforced in code).
+    """
 
     on: OnOff = False
-    allow_domains: AllowDomains = "any"
 
 
 class NewsSettings(FeatureSettings):
@@ -233,7 +194,6 @@ class Features(BaseModel):
 
     chat: ChatSettings = Field(default_factory=ChatSettings)
     interject: InterjectSettings = Field(default_factory=InterjectSettings)
-    read_links: ReadLinksSettings = Field(default_factory=ReadLinksSettings)
     tools: ToolsSettings = Field(default_factory=ToolsSettings)
     news: NewsSettings = Field(default_factory=NewsSettings)
     recap: RecapSettings = Field(default_factory=RecapSettings)
@@ -262,7 +222,6 @@ class GuildConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = ""
-    trust: Trust = Trust.PUBLIC
     consent: OnOff = False  # the people in the guild agreed to be read and summarised
     persona: str = "tiredfx"  # data/shared/personas/<persona>/
     style: str = "normal"  # data/shared/personas/_styles/<style>.md
@@ -279,6 +238,27 @@ class GuildConfig(BaseModel):
     blocked_users: list[UserId] = Field(default_factory=list)
     admins: list[UserId] = Field(default_factory=list)
     features: Features = Field(default_factory=Features)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_legacy_keys(cls, value):
+        """v3.7 removed ``trust``, ``read_links`` and ``tools.allow_domains``.
+
+        Existing config files still carry these keys and the models forbid extras, so
+        drop them silently before validation instead of failing the whole guild. A save
+        then writes them out no more. Mirrors ``InterjectSettings._drop_legacy_fx_chance``.
+        """
+        if not isinstance(value, dict):
+            return value
+        data = {k: v for k, v in value.items() if k != "trust"}
+        features = data.get("features")
+        if isinstance(features, dict):
+            features = {k: v for k, v in features.items() if k != "read_links"}
+            tools = features.get("tools")
+            if isinstance(tools, dict) and "allow_domains" in tools:
+                features["tools"] = {k: v for k, v in tools.items() if k != "allow_domains"}
+            data["features"] = features
+        return data
 
     @model_validator(mode="before")
     @classmethod
@@ -300,36 +280,33 @@ class GuildConfig(BaseModel):
 
 
 class FeatureSpec(tuple):
-    """name, min_trust, settings model, profile blocks it reads, token budget."""
+    """name, settings model, profile blocks it reads, token budget, recent recaps."""
 
-    def __new__(cls, name, min_trust, settings, profile_parts, token_budget, recent_recaps=0):
-        return tuple.__new__(cls, (name, min_trust, settings, profile_parts, token_budget, recent_recaps))
+    def __new__(cls, name, settings, profile_parts, token_budget, recent_recaps=0):
+        return tuple.__new__(cls, (name, settings, profile_parts, token_budget, recent_recaps))
 
     name = property(lambda self: self[0])
-    min_trust = property(lambda self: self[1])
-    settings = property(lambda self: self[2])
-    profile_parts = property(lambda self: self[3])
-    token_budget = property(lambda self: self[4])
-    recent_recaps = property(lambda self: self[5])
+    settings = property(lambda self: self[1])
+    profile_parts = property(lambda self: self[2])
+    token_budget = property(lambda self: self[3])
+    recent_recaps = property(lambda self: self[4])
 
 
 # Ordered like the design table. Adding a feature = one row here + a settings model
 # + a field on Features; /setup and validation pick it up from this dict.
 FEATURES = {
-    "chat": FeatureSpec("chat", Trust.PUBLIC, ChatSettings, ("kurt", "people", "jokes"), 500),
-    "interject": FeatureSpec("interject", Trust.PUBLIC, InterjectSettings, ("kurt", "jokes"), 500),
-    "read_links": FeatureSpec("read_links", Trust.PUBLIC, ReadLinksSettings, (), 0),
-    "tools": FeatureSpec("tools", Trust.OWNER, ToolsSettings, (), 0),
-    "news": FeatureSpec("news", Trust.PUBLIC, NewsSettings, ("kurt", "threads", "unfinished"), 500),
+    "chat": FeatureSpec("chat", ChatSettings, ("kurt", "people", "jokes"), 500),
+    "interject": FeatureSpec("interject", InterjectSettings, ("kurt", "jokes"), 500),
+    "tools": FeatureSpec("tools", ToolsSettings, (), 0),
+    "news": FeatureSpec("news", NewsSettings, ("kurt", "threads", "unfinished"), 500),
     "recap": FeatureSpec(
         "recap",
-        Trust.PUBLIC,
         RecapSettings,
         ("kurt", "threads", "people", "jokes", "unfinished", "drift"),
         1500,
         3,
     ),
-    "topics": FeatureSpec("topics", Trust.PUBLIC, TopicsSettings, ("kurt", "threads", "unfinished"), 500),
+    "topics": FeatureSpec("topics", TopicsSettings, ("kurt", "threads", "unfinished"), 500),
 }
 
 FEATURE_NAMES = tuple(FEATURES)
@@ -343,9 +320,9 @@ def settings_for(cfg: Optional[GuildConfig], feature: str) -> Optional[FeatureSe
 
 
 def effective(cfg: Optional[GuildConfig], feature: str) -> bool:
-    """On *and* allowed by the guild's trust level. Unconfigured guild = everything off."""
-    spec = FEATURES[feature]  # KeyError on a typo: features come from the registry
-    if cfg is None or cfg.trust < spec.min_trust:
+    """The feature's own switch. Unconfigured guild = everything off."""
+    FEATURES[feature]  # KeyError on a typo: features come from the registry
+    if cfg is None:
         return False
     settings = cfg.features.get(feature)
     return bool(settings is not None and settings.on)
@@ -417,12 +394,11 @@ def strip_owner(cfg: GuildConfig, owner_id=None) -> GuildConfig:
 
 
 def dm_config(name: str = "direct messages") -> GuildConfig:
-    """Config for the fixed ``dm-owner`` guild: owner trust, chat only, no DMs to others."""
+    """Config for the fixed ``dm-owner`` guild: chat and search, no interjecting."""
     return GuildConfig(
         name=name,
-        trust=Trust.OWNER,
         consent=True,
-        features=Features(interject=InterjectSettings(on=False)),
+        features=Features(interject=InterjectSettings(on=False), tools=ToolsSettings(on=True)),
     )
 
 

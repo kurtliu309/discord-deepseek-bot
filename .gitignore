@@ -2,8 +2,6 @@
 .env
 .env.*
 !.env.example
-# searxng session-signing key (SEARXNG_SECRET only; template is searxng.env.example)
-searxng.env
 config.yaml
 
 # python
