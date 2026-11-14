@@ -1,11 +1,11 @@
-"""Model tool loop: schemas, the three read-only tools, and the capped loop.
+"""Model tool loop: schemas, the two read-only tools, and the capped loop.
 
-v4.0: the three tools are implemented here instead of in the old MCP ``tools`` container.
-``read_page`` / ``read_video`` ask the keyless fetcher (``POST /url`` / ``POST /video``);
-``search`` calls DeepSeek's Anthropic-compatible endpoint with its built-in server-side
-``web_search`` tool. The bot decides *which* tools a question may use (a plain array of
-OpenAI-format function schemas), charges one lookup before every call and enforces the
-per-question caps below.
+v4.0: the tools are implemented here instead of in the old MCP ``tools`` container.
+``read`` asks the keyless fetcher (``POST /read``), which decides by itself whether the
+link is a video (yt-dlp subtitles) or a page; ``search`` calls DeepSeek's
+Anthropic-compatible endpoint with its built-in server-side ``web_search`` tool. The bot
+decides *which* tools a question may use (a plain array of OpenAI-format function
+schemas), charges one lookup before every call and enforces the per-question caps below.
 
 Schemas only expose parameters the model may fill: ``query``, ``url`` and ``max_chars``.
 Anything else the model sends is dropped before a tool runs. Everything a tool returns
@@ -24,7 +24,7 @@ MAX_CALLS = 4  # tool executions per question
 MAX_CHARS = 40000  # tool output characters per question, all calls together
 MAX_ROUNDS_PAD = 3  # extra model rounds on top of MAX_CALLS, so a confused model cannot loop
 
-ALLOWED_TOOLS = ("search", "read_page", "read_video")
+ALLOWED_TOOLS = ("read", "search")
 SEARCH_URL = "https://api.deepseek.com/anthropic/v1/messages"
 SEARCH_MAX_USES = 2  # DeepSeek-side searches per one ``search`` tool call
 SEARCH_TIMEOUT = 120
@@ -52,13 +52,14 @@ SEARCH_SCHEMA = {
     },
 }
 
-READ_PAGE_SCHEMA = {
+READ_SCHEMA = {
     "type": "function",
     "function": {
-        "name": "read_page",
+        "name": "read",
         "description": (
-            "Open one public https page and return its text (title + body). Use it "
-            "after search, or when someone gives you a link to read."
+            "Open one public https link and return its text. Video links (YouTube, "
+            "Bilibili, Vimeo and many more) are read as title + subtitles; anything "
+            "else as page text."
         ),
         "parameters": {
             "type": "object",
@@ -75,39 +76,14 @@ READ_PAGE_SCHEMA = {
     },
 }
 
-READ_VIDEO_SCHEMA = {
-    "type": "function",
-    "function": {
-        "name": "read_video",
-        "description": (
-            "Read a video's PUBLIC subtitles as timestamped text. No audio download "
-            "and no transcription: if the video has no public subtitles you get a "
-            "short reason instead."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "url": {"type": "string", "description": "The video URL."},
-                "max_chars": {
-                    "type": "integer", "minimum": 500, "maximum": 50000, "default": 30000,
-                    "description": "Longest text to return, in characters.",
-                },
-            },
-            "required": ["url"],
-            "additionalProperties": False,
-        },
-    },
-}
-
-TOOL_SCHEMAS = [SEARCH_SCHEMA, READ_PAGE_SCHEMA, READ_VIDEO_SCHEMA]
+TOOL_SCHEMAS = [READ_SCHEMA, SEARCH_SCHEMA]
 # Per-tool whitelist of model-supplied arguments (nothing else is forwarded).
 SCHEMA_ARGS = {
     "search": ("query",),
-    "read_page": ("url", "max_chars"),
-    "read_video": ("url", "max_chars"),
+    "read": ("url", "max_chars"),
 }
 
-UNKNOWN_TOOL_TEXT = "error: no tool named {name!r}. Only search, read_page and read_video exist."
+UNKNOWN_TOOL_TEXT = "error: no tool named {name!r}. Only search and read exist."
 BAD_ARGS_TEXT = "error: the arguments for {name!r} were not valid JSON. Call it again."
 CALLS_LIMIT_TEXT = (
     "error: you have already used all {max_calls} tool calls for this question. "
@@ -138,10 +114,10 @@ SEARCH_MAX_TOKENS = 3000
 # pure helpers
 # --------------------------------------------------------------------------- #
 def schemas_for(search_on: bool):
-    """The tool schemas a question may use: both readers, plus search when it is on."""
-    schemas = [READ_PAGE_SCHEMA, READ_VIDEO_SCHEMA]
+    """The tool schemas a question may use: ``read``, plus ``search`` when it is on."""
+    schemas = [READ_SCHEMA]
     if search_on:
-        schemas.insert(0, SEARCH_SCHEMA)
+        schemas.append(SEARCH_SCHEMA)
     return schemas
 
 
@@ -210,7 +186,7 @@ def _tool_calls(message):
 # the tools
 # --------------------------------------------------------------------------- #
 class Tools:
-    """The three read-only tools: pages and videos via the fetcher, search via DeepSeek.
+    """The two read-only tools: ``read`` via the fetcher, ``search`` via DeepSeek.
 
     ``fetcher`` is the bot's existing internal-network ``httpx.AsyncClient``
     (``trust_env=False``). The search client is separate and *does* use the environment's
@@ -237,12 +213,10 @@ class Tools:
         clean = clean_args(name, args)
         if name == "search":
             return await self.search(clean.get("query") or "")
-        return await self._read(name, clean)
+        return await self._read(clean)
 
-    async def _read(self, name, args) -> str:
-        response = await self.fetcher.post(
-            "/url" if name == "read_page" else "/video", json=args
-        )
+    async def _read(self, args) -> str:
+        response = await self.fetcher.post("/read", json=args)
         data = response.json() if response.content else {}
         if not isinstance(data, dict) or not data.get("ok"):
             error = data.get("error") if isinstance(data, dict) else None

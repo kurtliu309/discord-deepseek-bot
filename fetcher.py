@@ -13,6 +13,11 @@ Endpoints (JSON in / JSON out, listen on :8080):
   POST /video            {"url": str, "max_chars": int}     -> same shape (public subtitles only)
                          yt-dlp reads the video metadata and its public subtitle track through
                          the egress proxy; no audio download, no ffmpeg, no ASR, no cookies.
+  POST /read             {"url": str, "max_chars": int}     -> same shape plus "kind": "video" | "page"
+                         Decides by itself: a URL that a site-specific yt-dlp extractor knows
+                         is read as a video; anything else as a page. A video whose subtitles
+                         can't be read falls back to the page text with a note in front.
+                         (/url and /video stay for compatibility and tests.)
   POST /rss              {"feeds": [{"name","url"}], "per_feed": int}   -> {"items": [{"source","title","link","summary"}]}
                          (Reddit uses its public RSS feeds through /rss; requests to one host are spaced out)
   GET  /health                                              -> {"ok": true}
@@ -620,6 +625,85 @@ def fetch_video(url, max_chars=VIDEO_CHARS):
     return {"ok": True, "title": title[:300], "text": text, "truncated": truncated}
 
 
+# --------------------------------------------------------------------------- #
+# POST /read: video or page, decided by yt-dlp's own extractors
+# --------------------------------------------------------------------------- #
+_VIDEO_EXTRACTORS = None
+
+
+def video_extractors():
+    """yt-dlp's site-specific extractors, built once and cached.
+
+    ``GenericIE`` matches every URL and is left out: it says nothing about the link
+    being a video.
+    """
+    global _VIDEO_EXTRACTORS
+    if _VIDEO_EXTRACTORS is None:
+        classes = []
+        for ie in yt_dlp.extractor.gen_extractor_classes():
+            if ie.__name__ == "GenericIE" or ie.ie_key() == "Generic":
+                continue
+            classes.append(ie)
+        _VIDEO_EXTRACTORS = classes
+    return _VIDEO_EXTRACTORS
+
+
+def looks_like_video(url) -> bool:
+    """True when a site-specific extractor recognises the URL. No network involved."""
+    url = (url or "").strip()
+    if not re.match(r"^[a-z][a-z0-9+.-]*://", url, re.IGNORECASE):
+        url = "https://" + url
+    url = https(url)
+    for ie in video_extractors():
+        try:
+            if ie.suitable(url):
+                return True
+        except Exception:  # an extractor choking on a URL just doesn't match it
+            continue
+    return False
+
+
+VIDEO_FALLBACK_NOTE = (
+    "[This link looks like a video, but its subtitles could not be read: {reason}. "
+    "Below is the page text instead.]"
+)
+
+
+def fetch_read(url, max_chars=None):
+    """A link as whatever it is: video subtitles when yt-dlp knows the site, page otherwise.
+
+    Output has the shape of ``/url`` plus ``kind``: ``"video"`` for subtitles, ``"page"``
+    for page text — including a video link whose subtitles could not be read, whose page
+    text is then prefixed with a line saying why.
+    """
+    url = (url or "").strip()
+    if not looks_like_video(url):
+        return {**fetch_url(url, max_chars), "kind": "page"}
+
+    try:
+        return {**fetch_video(url, max_chars), "kind": "video"}
+    except Exception as e:
+        video_error = str(e).strip() or type(e).__name__
+
+    try:
+        page = fetch_url(url, max_chars)
+    except Exception as e:
+        page_error = str(e).strip() or type(e).__name__
+        return {"ok": False,
+                "error": f"视频读取失败：{video_error}；网页读取也失败：{page_error}"}
+
+    limit = clamp_int(max_chars, MAX_CHARS_MIN, MAX_CHARS_MAX, MAX_TEXT)
+    note = VIDEO_FALLBACK_NOTE.format(reason=video_error)
+    text, cut_by_note = cap(note + "\n\n" + (page.get("text") or ""), limit)
+    return {
+        "ok": True,
+        "title": page.get("title") or "",
+        "text": text,
+        "truncated": bool(page.get("truncated") or cut_by_note),
+        "kind": "page",
+    }
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, code, obj):
         body = json.dumps(obj).encode()
@@ -653,6 +737,15 @@ class Handler(BaseHTTPRequestHandler):
                     # Host only (no path / query): enough to spot 429s without logging links.
                     host = urlparse(req.get("url") or "").hostname or "?"
                     log(f"video {host}: {str(res.get('error'))[:200]}")
+                return self._send(200, res)
+            if u.path == "/read":
+                req = json.loads(body)
+                max_chars = clamp_int(req.get("max_chars"), MAX_CHARS_MIN, MAX_CHARS_MAX, MAX_TEXT)
+                res = fetch_read(req.get("url") or "", max_chars)
+                if not res.get("ok"):
+                    # Host only (no path / query): enough to spot 429s without logging links.
+                    host = urlparse(req.get("url") or "").hostname or "?"
+                    log(f"read {host}: {str(res.get('error'))[:200]}")
                 return self._send(200, res)
             if u.path == "/file":
                 name = (parse_qs(u.query).get("name") or ["file"])[0][:200]

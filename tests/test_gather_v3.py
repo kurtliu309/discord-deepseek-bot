@@ -25,7 +25,7 @@ class Resp:
 
 
 class FakeFetcher:
-    """Answers ``/url`` and ``/file`` like the real fetcher, and records what was asked."""
+    """Answers ``/read`` and ``/file`` like the real fetcher, and records what was asked."""
 
     def __init__(self, urls=None, files=None, fail=False):
         self.urls = urls or {}
@@ -35,7 +35,7 @@ class FakeFetcher:
         self.file_calls = []
 
     async def post(self, path, json=None, params=None, content=None):
-        if path in ("/url", "/video"):
+        if path == "/read":
             url = json["url"]
             self.url_calls.append(url)
             self.paths = getattr(self, "paths", []) + [path]
@@ -101,21 +101,13 @@ class FakeBot(bot.Bot):
 
 
 class TestVideoLinks(unittest.IsolatedAsyncioTestCase):
-    def test_is_video_url(self):
-        for u in ("https://www.youtube.com/watch?v=abc", "https://youtu.be/abc",
-                  "https://m.youtube.com/shorts/abc", "https://www.bilibili.com/video/BV1x",
-                  "https://b23.tv/xyz"):
-            self.assertTrue(bot.is_video_url(u), u)
-        for u in ("https://www.youtube.com/@someone", "https://example.com/watch?v=1",
-                  "https://www.bilibili.com/read/cv1", "https://notyoutube.com/watch?v=1"):
-            self.assertFalse(bot.is_video_url(u), u)
-
-    async def test_pasted_video_link_goes_to_video_endpoint(self):
+    async def test_pasted_links_all_go_to_read_regardless_of_site(self):
+        # The bot no longer guesses: video or page is the fetcher's call.
         yt, page = "https://www.youtube.com/watch?v=abc", "https://example.com/x"
         fetcher = FakeFetcher(urls={yt: ("Video", "[00:01] hi"), page: ("Page", "text")})
         fake = FakeBot(fetcher)
         data, _ = await bot.Bot.gather_data(fake, msg(1, content=f"{yt} and {page}"), cfg=cfg())
-        self.assertEqual(fetcher.paths, ["/video", "/url"])
+        self.assertEqual(fetcher.paths, ["/read", "/read"])
         self.assertIn("[00:01] hi", data)
 
 

@@ -1,5 +1,5 @@
-"""fetcher.py: POST /video (public subtitles, moved here from tools/server.py) and the
-optional max_chars on POST /url.
+"""fetcher.py: POST /video (public subtitles, moved here from tools/server.py), the
+optional max_chars on POST /url, and POST /read (video or page, decided by yt-dlp).
 
 Offline: yt-dlp and the HTTP download are replaced by fakes; the endpoint tests talk to an
 in-process ThreadingHTTPServer on 127.0.0.1, so nothing leaves the machine.
@@ -305,6 +305,93 @@ class FetchVideoTests(FakeYtdlpMixin):
 
 
 # --------------------------------------------------------------------------- #
+# /read: video or page, decided by yt-dlp's extractors (no network)
+# --------------------------------------------------------------------------- #
+class LooksLikeVideoTests(unittest.TestCase):
+    def test_video_sites_are_recognised(self):
+        for url in ("https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                    "https://youtu.be/dQw4w9WgXcQ",
+                    "https://www.bilibili.com/video/BV1xx411c7mD",
+                    "https://vimeo.com/76979871"):
+            self.assertTrue(fetcher.looks_like_video(url), url)
+
+    def test_other_links_are_pages(self):
+        for url in ("https://example.com/a", "https://www.bilibili.com/read/cv1"):
+            self.assertFalse(fetcher.looks_like_video(url), url)
+
+    def test_extractor_list_is_built_once_and_skips_generic(self):
+        first = fetcher.video_extractors()
+        self.assertIs(first, fetcher.video_extractors())
+        self.assertNotIn("GenericIE", [ie.__name__ for ie in first])
+
+
+class FetchReadTests(unittest.TestCase):
+    URL = "https://youtu.be/dQw4w9WgXcQ"
+    PAGE = {"ok": True, "title": "P", "text": "page body", "truncated": False}
+
+    def setUp(self):
+        self.video = mock.patch("fetcher.fetch_video").start()
+        self.page = mock.patch("fetcher.fetch_url").start()
+        self.looks = mock.patch("fetcher.looks_like_video").start()
+        self.addCleanup(mock.patch.stopall)
+
+    def test_video_link_is_read_as_subtitles(self):
+        self.looks.return_value = True
+        self.video.return_value = {"ok": True, "title": "V", "text": "[00:01] hi",
+                                   "truncated": False}
+        out = fetcher.fetch_read(self.URL, 1000)
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["kind"], "video")
+        self.assertEqual(out["title"], "V")
+        self.assertEqual(out["text"], "[00:01] hi")
+        self.video.assert_called_once_with(self.URL, 1000)
+        self.page.assert_not_called()
+
+    def test_unreadable_video_falls_back_to_the_page_with_a_note(self):
+        self.looks.return_value = True
+        self.video.side_effect = ValueError("这个视频没有公开字幕")
+        self.page.return_value = dict(self.PAGE)
+        out = fetcher.fetch_read(self.URL)
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["kind"], "page")
+        self.assertEqual(out["title"], "P")
+        self.assertTrue(out["text"].startswith(
+            "[This link looks like a video, but its subtitles could not be read: "
+            "这个视频没有公开字幕."))
+        self.assertIn("Below is the page text instead.", out["text"])
+        self.assertTrue(out["text"].endswith("page body"))
+
+    def test_both_fail_reports_both_reasons(self):
+        self.looks.return_value = True
+        self.video.side_effect = ValueError("这个视频需要登录或会员权限；只读工具不带 cookies")
+        self.page.side_effect = ValueError("only http(s) urls")
+        out = fetcher.fetch_read(self.URL)
+        self.assertFalse(out["ok"])
+        self.assertIn("视频读取失败", out["error"])
+        self.assertIn("需要登录", out["error"])
+        self.assertIn("网页读取也失败", out["error"])
+        self.assertIn("only http(s) urls", out["error"])
+
+    def test_plain_link_skips_ytdlp_and_is_a_page(self):
+        self.looks.return_value = False
+        self.page.return_value = dict(self.PAGE)
+        out = fetcher.fetch_read("https://example.com/a", 5000)
+        self.assertEqual(out["kind"], "page")
+        self.assertEqual(out["text"], "page body")
+        self.page.assert_called_once_with("https://example.com/a", 5000)
+        self.video.assert_not_called()
+
+    def test_fallback_text_is_capped(self):
+        self.looks.return_value = True
+        self.video.side_effect = ValueError("没有公开字幕")
+        self.page.return_value = {"ok": True, "title": "P", "text": "x" * 5000,
+                                  "truncated": False}
+        out = fetcher.fetch_read(self.URL, 1000)
+        self.assertTrue(out["truncated"])
+        self.assertEqual(len(out["text"]), 1000)
+
+
+# --------------------------------------------------------------------------- #
 # /url max_chars (the useful bit of tools/server.py's do_read_page)
 # --------------------------------------------------------------------------- #
 class UrlMaxCharsTests(FakeYtdlpMixin):
@@ -410,6 +497,65 @@ class EndpointTests(FakeYtdlpMixin):
         self.assertEqual(len(data["text"]), 1200)
         _, data = self.post("/url", {"url": "https://example.com/p"})
         self.assertFalse(data["truncated"])
+
+    # -- /read ----------------------------------------------------------------- #
+
+    def test_read_video_returns_kind_video(self):
+        FakeYDL.info = {
+            "title": "T",
+            "webpage_url": "https://youtu.be/dQw4w9WgXcQ",
+            "uploader": "U",
+            "duration": 65,
+            "subtitles": {"en": [{"ext": "srt", "data": SRT}]},
+        }
+        status, data = self.post("/read", {"url": "https://youtu.be/dQw4w9WgXcQ"})
+        self.assertEqual(status, 200)
+        self.assertEqual(set(data), {"ok", "title", "text", "truncated", "kind"})
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["kind"], "video")
+        self.assertIn("[00:00] hello world", data["text"])
+
+    def test_read_video_max_chars_from_request(self):
+        FakeYDL.info = {"title": "T", "duration": 65,
+                        "subtitles": {"en": [{"ext": "srt", "data": long_srt()}]}}
+        _, data = self.post("/read", {"url": "https://youtu.be/dQw4w9WgXcQ", "max_chars": 1000})
+        self.assertEqual(data["kind"], "video")
+        self.assertTrue(data["truncated"])
+        self.assertEqual(len(data["text"]), 1000)
+
+    def test_read_unreadable_video_falls_back_to_page_text(self):
+        FakeYDL.info = {"title": "T", "subtitles": {}, "automatic_captions": {}}
+        html = b"<html><head><title>P</title></head><body>page body</body></html>"
+        fetcher.download = lambda url: (html, "text/html", "https://youtu.be/dQw4w9WgXcQ")
+        _, data = self.post("/read", {"url": "https://youtu.be/dQw4w9WgXcQ"})
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["kind"], "page")
+        self.assertTrue(data["text"].startswith(
+            "[This link looks like a video, but its subtitles could not be read:"))
+        self.assertIn("没有公开字幕", data["text"])
+        self.assertIn("page body", data["text"])
+
+    def test_read_plain_link_never_runs_ytdlp(self):
+        html = b"<html><head><title>P</title></head><body>page body</body></html>"
+        fetcher.download = lambda url: (html, "text/html", "https://example.com/a")
+        _, data = self.post("/read", {"url": "https://example.com/a"})
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["kind"], "page")
+        self.assertEqual(data["title"], "P")
+        self.assertEqual(data["text"], "page body")
+        self.assertEqual(FakeYDL.opts_seen, [])
+
+    def test_read_both_fail_reports_both_reasons(self):
+        FakeYDL.info = {"title": "T", "subtitles": {}, "automatic_captions": {}}
+
+        def boom(url):
+            raise ValueError("page is down")
+
+        fetcher.download = boom
+        _, data = self.post("/read", {"url": "https://youtu.be/dQw4w9WgXcQ"})
+        self.assertFalse(data["ok"])
+        self.assertIn("没有公开字幕", data["error"])
+        self.assertIn("page is down", data["error"])
 
 
 if __name__ == "__main__":

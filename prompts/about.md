@@ -10,6 +10,13 @@ docker-compose.yml, egress/).
 Newest first. Same as the "What's new" box on the guide page. When asked what changed or
 what's new, answer from this list.
 
+- **v4.1 · 2026-11-15**
+  - Links from any video site yt-dlp knows (YouTube, Bilibili, Vimeo and many more) are
+    now read as video (title + subtitles), not only YouTube and Bilibili. When the
+    subtitles can't be read (none, a login needed, or the link only looks like a video),
+    the bot falls back to the page text and says so in the first line.
+  - The model's two reading tools are merged into one: `read` opens any https link and
+    the fetcher decides whether it is a video or a page.
 - **v4.0.1 · 2026-11-15**
   - A pasted YouTube / Bilibili link is now read as a video (title + subtitles) instead
     of as a web page, which only gave the site footer.
@@ -271,14 +278,13 @@ what's new, answer from this list.
 
 ## The tools
 
-- Three tools, all read-only: `search` (web search, run by DeepSeek's own server-side
-  search; returns titles, links and a short answer with sources), `read_page` (opens one
-  public https page and returns its text) and `read_video` (reads a video's public
-  subtitles, timestamped; no audio download and no transcription).
+- Two tools, both read-only: `search` (web search, run by DeepSeek's own server-side
+  search; returns titles, links and a short answer with sources) and `read` (opens one
+  public https link and returns its text: a video's public subtitles, timestamped, when
+  yt-dlp knows the site; the page text otherwise; no audio download and no transcription).
 - Every server's replies carry the read-only tool list, except its own jump-ins, which
   never send one. `search` only works when the server's "Web search" switch is on;
-  `read_page` and `read_video` are always available. Unconfigured servers get no replies
-  at all.
+  `read` is always available. Unconfigured servers get no replies at all.
 - The model only chooses the query or the link. The bot charges one lookup before each
   call and stops the question after 4 calls or about 40,000 characters. Reading a page or
   subtitles goes through the key-less fetcher, which holds no secrets.

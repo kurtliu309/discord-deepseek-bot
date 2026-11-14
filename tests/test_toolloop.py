@@ -105,10 +105,17 @@ def tool_messages(messages):
 
 
 class TestSchemas(unittest.TestCase):
-    def test_three_read_only_tools(self):
+    def test_two_read_only_tools(self):
         names = [t["function"]["name"] for t in tl.TOOL_SCHEMAS]
-        self.assertEqual(names, ["search", "read_page", "read_video"])
+        self.assertEqual(names, ["read", "search"])
         self.assertEqual(tuple(names), tl.ALLOWED_TOOLS)
+
+    def test_read_schema_is_one_tool_for_videos_and_pages(self):
+        schema = tl.SCHEMA_ARGS
+        self.assertEqual(schema["read"], ("url", "max_chars"))
+        blob = json.dumps(tl.READ_SCHEMA)
+        self.assertIn("subtitles", blob)
+        self.assertIn("page text", blob)
 
     def test_schema_never_mentions_bot_side_keys(self):
         blob = json.dumps(tl.TOOL_SCHEMAS)
@@ -116,14 +123,14 @@ class TestSchemas(unittest.TestCase):
         self.assertNotIn("allow_domains", blob)
         self.assertNotIn("max_results", blob)
 
-    def test_schemas_for_without_search_has_only_the_readers(self):
+    def test_schemas_for_without_search_has_only_the_reader(self):
         names = [t["function"]["name"] for t in tl.schemas_for(False)]
-        self.assertEqual(names, ["read_page", "read_video"])
+        self.assertEqual(names, ["read"])
         self.assertNotIn("search", names)
 
-    def test_schemas_for_with_search_has_all_three(self):
+    def test_schemas_for_with_search_has_both(self):
         names = [t["function"]["name"] for t in tl.schemas_for(True)]
-        self.assertEqual(names, ["search", "read_page", "read_video"])
+        self.assertEqual(names, ["read", "search"])
 
 
 # --------------------------------------------------------------------------- #
@@ -172,41 +179,41 @@ class TestSearch(unittest.IsolatedAsyncioTestCase):
         self.assertIn("error:", await tools.search("q"))
 
 
-class TestReaders(unittest.IsolatedAsyncioTestCase):
-    async def test_read_page_posts_to_url(self):
+class TestReader(unittest.IsolatedAsyncioTestCase):
+    async def test_read_posts_to_read_endpoint(self):
         sent = []
-        tools = make_tools(sent, {"ok": True, "title": "T", "text": "body"})
-        text = await tools.call("read_page", {"url": "https://x.example/a", "max_chars": 900})
+        tools = make_tools(sent, {"ok": True, "title": "T", "text": "body", "kind": "page"})
+        text = await tools.call("read", {"url": "https://x.example/a", "max_chars": 900})
         self.assertEqual(text, "T\n\nbody")
-        self.assertEqual(sent[0].url.path, "/url")
+        self.assertEqual(sent[0].url.path, "/read")
         self.assertEqual(json.loads(sent[0].content),
                          {"url": "https://x.example/a", "max_chars": 900})
 
-    async def test_read_video_posts_to_video(self):
+    async def test_video_text_without_title_is_returned_as_is(self):
+        # Whatever the fetcher read (video subtitles or page text) comes back the same way.
         sent = []
-        tools = make_tools(sent, {"ok": True, "title": "", "text": "[00:01] hi"})
-        text = await tools.call("read_video", {"url": "https://v.example/v"})
+        tools = make_tools(sent, {"ok": True, "title": "", "text": "[00:01] hi", "kind": "video"})
+        text = await tools.call("read", {"url": "https://v.example/v"})
         self.assertEqual(text, "[00:01] hi")  # no title: text only
-        self.assertEqual(sent[0].url.path, "/video")
-        self.assertEqual(json.loads(sent[0].content), {"url": "https://v.example/v"})
+        self.assertEqual(sent[0].url.path, "/read")
 
     async def test_fetcher_error_becomes_error_text(self):
         tools = make_tools([], {"ok": False, "error": "fetch failed: ConnectError"})
         self.assertEqual(
-            await tools.call("read_page", {"url": "https://x"}),
+            await tools.call("read", {"url": "https://x"}),
             "error: fetch failed: ConnectError",
         )
 
     async def test_truncated_result_says_so_at_the_end(self):
         tools = make_tools([], {"ok": True, "title": "T", "text": "body", "truncated": True})
-        text = await tools.call("read_page", {"url": "https://x"})
+        text = await tools.call("read", {"url": "https://x"})
         self.assertTrue(text.startswith("T\n\nbody"))
         self.assertIn("truncated", text.split("body", 1)[1])
 
     async def test_extra_arguments_are_dropped_before_the_request(self):
         sent = []
         tools = make_tools(sent, {"ok": True, "title": "T", "text": "b"})
-        await tools.call("read_page", {
+        await tools.call("read", {
             "url": "https://x", "max_chars": 100,
             "guild_id": "evil", "allow_domains": ["evil.example"], "max_results": 9,
         })
@@ -237,12 +244,12 @@ class TestToolLoop(unittest.IsolatedAsyncioTestCase):
         self.assertIs(ask.calls[0][1], schemas)
 
     async def test_tool_output_is_wrapped_as_untrusted_data(self):
-        ask = FakeAsk([model_message(calls=[tool_call("read_page", {"url": "https://x"})])])
+        ask = FakeAsk([model_message(calls=[tool_call("read", {"url": "https://x"})])])
         tools = FakeTools(replies=["page text"])
         await tl.run_tool_loop(ask, [], tools, tl.schemas_for(False), lambda: True)
         result = tool_messages(ask.calls[-1][0])[0]["content"]
-        self.assertEqual(result, "=== tool: read_page ===\npage text\n=== end tool ===")
-        self.assertEqual(tools.calls[0], ("read_page", {"url": "https://x"}))
+        self.assertEqual(result, "=== tool: read ===\npage text\n=== end tool ===")
+        self.assertEqual(tools.calls[0], ("read", {"url": "https://x"}))
 
     async def test_unknown_tool_name_is_refused_without_a_call(self):
         ask = FakeAsk([
@@ -311,8 +318,8 @@ class TestToolLoop(unittest.IsolatedAsyncioTestCase):
         script = [
             model_message(calls=[tool_call("search", {"query": "a"})]),
             model_message(calls=[
-                tool_call("read_page", {"url": "https://x"}, "c2"),
-                tool_call("read_page", {"url": "https://y"}, "c3"),
+                tool_call("read", {"url": "https://x"}, "c2"),
+                tool_call("read", {"url": "https://y"}, "c3"),
             ]),
         ]
         ask = FakeAsk(script)
@@ -330,7 +337,7 @@ class TestToolLoop(unittest.IsolatedAsyncioTestCase):
 
     async def test_tool_exception_becomes_a_result_not_a_crash(self):
         ask = FakeAsk([
-            model_message(calls=[tool_call("read_video", {"url": "https://v"})]),
+            model_message(calls=[tool_call("read", {"url": "https://v"})]),
             model_message("answered anyway"),
         ])
         tools = FakeTools(error=RuntimeError("boom"))
@@ -367,17 +374,17 @@ class TestBotGate(unittest.TestCase):
     def test_interjection_never_gets_tools(self):
         self.assertIsNone(bot.tool_permission(self._cfg(True), "interject"))
 
-    def test_search_off_gets_the_two_readers(self):
+    def test_search_off_gets_the_reader(self):
         names = [t["function"]["name"] for t in bot.tool_permission(self._cfg(False), "mention")]
-        self.assertEqual(names, ["read_page", "read_video"])
+        self.assertEqual(names, ["read"])
 
-    def test_search_on_gets_three_tools(self):
+    def test_search_on_gets_both_tools(self):
         names = [t["function"]["name"] for t in bot.tool_permission(self._cfg(True), "mention")]
-        self.assertEqual(names, ["search", "read_page", "read_video"])
+        self.assertEqual(names, ["read", "search"])
 
-    def test_unconfigured_guild_still_gets_the_readers(self):
+    def test_unconfigured_guild_still_gets_the_reader(self):
         names = [t["function"]["name"] for t in bot.tool_permission(None, "mention")]
-        self.assertEqual(names, ["read_page", "read_video"])
+        self.assertEqual(names, ["read"])
 
     def test_tools_addendum_mentions_search_only_when_it_is_there(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -475,7 +482,7 @@ class TestReplyWiring(unittest.IsolatedAsyncioTestCase):
             guild=SimpleNamespace(id=111), channel=SimpleNamespace(id=222),
         )
 
-    async def test_search_on_reply_carries_all_three_tools(self):
+    async def test_search_on_reply_carries_both_tools(self):
         cfg = g.GuildConfig.model_validate(
             {"name": "x", "features": {"tools": {"on": True}}}
         )
@@ -483,13 +490,13 @@ class TestReplyWiring(unittest.IsolatedAsyncioTestCase):
         await bot.Bot.reply(fake, self._message(), "mention", False, cfg, "111")
         self.assertEqual(
             [t["function"]["name"] for t in fake.asks[0]],
-            ["search", "read_page", "read_video"],
+            ["read", "search"],
         )
         self.assertIn("call the provided tools", fake.system)
         self.assertIn("search tool", fake.system)
         self.assertEqual(fake.plan, [[("reply", "hello", 0.0)]])
 
-    async def test_search_off_reply_still_has_the_two_readers(self):
+    async def test_search_off_reply_still_has_the_reader(self):
         cfg = g.GuildConfig.model_validate(
             {"name": "x", "features": {"tools": {"on": False}}}
         )
@@ -497,7 +504,7 @@ class TestReplyWiring(unittest.IsolatedAsyncioTestCase):
         await bot.Bot.reply(fake, self._message(), "mention", False, cfg, "111")
         self.assertEqual(
             [t["function"]["name"] for t in fake.asks[0]],
-            ["read_page", "read_video"],
+            ["read"],
         )
         self.assertIn("call the provided tools", fake.system)
         self.assertNotIn("search tool", fake.system)
