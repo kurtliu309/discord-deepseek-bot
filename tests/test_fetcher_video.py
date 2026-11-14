@@ -8,10 +8,13 @@ in-process ThreadingHTTPServer on 127.0.0.1, so nothing leaves the machine.
 import http.client
 import json
 import os
+import tempfile
 import threading
 import unittest
 from http.server import ThreadingHTTPServer
 from unittest import mock
+
+import httpx
 
 import fetcher
 
@@ -216,6 +219,198 @@ class VideoUrlTests(unittest.TestCase):
 # --------------------------------------------------------------------------- #
 # fetch_video with a fake yt-dlp
 # --------------------------------------------------------------------------- #
+class BilibiliApiTests(FakeYtdlpMixin):
+    """B站 subtitles come from B站's own API, offline; the cookies never leave B站's hosts."""
+
+    BVID = "BV1xx411c7mD"
+    VIDEO_URL = f"https://www.bilibili.com/video/{BVID}"
+    SUB_HOST = "aisubtitle.hdslb.com"
+    SUB_URL = f"//{SUB_HOST}/bfs/subtitle/1.json"
+
+    def setUp(self):
+        super().setUp()
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.cookie_dir = tmp.name
+        self.cookie_path = os.path.join(tmp.name, "cookies.txt")
+        with open(self.cookie_path, "w", encoding="utf-8") as f:
+            f.write("# Netscape HTTP Cookie File\n"
+                    ".bilibili.com\tTRUE\t/\tTRUE\t0\tSESSDATA\tfake-sessdata\n")
+        env = mock.patch.dict(os.environ, {"BILIBILI_COOKIES": self.cookie_path})
+        env.start()
+        self.addCleanup(env.stop)
+
+        # What the fake B站 answers; each test may change these before it runs.
+        self.login = True
+        self.subtitles = [{"lan": "ai-zh", "subtitle_url": self.SUB_URL}]
+        self.subtitle_body = [{"from": 0, "to": 2, "content": "你好"},
+                              {"from": 10, "to": 12, "content": "世界"}]
+        self.pages = [{"cid": 111}, {"cid": 222}]
+        self.empty_lists = 0  # how many subtitle-list answers come back empty first
+        wait = mock.patch.object(fetcher, "BILIBILI_SUB_WAIT", 0)
+        wait.start()
+        self.addCleanup(wait.stop)
+        self.player_cids = []
+        self.subtitle_fetches = []
+        self.requests = []  # (host, Cookie header)
+
+        self._real_bilibili_client = fetcher.bilibili_client
+        self.addCleanup(setattr, fetcher, "bilibili_client", self._real_bilibili_client)
+        transport = httpx.MockTransport(self.handle)
+        fetcher.bilibili_client = lambda: httpx.Client(
+            transport=transport, timeout=5, trust_env=False, headers=fetcher.BILIBILI_HEADERS)
+
+        FakeYDL.info = {"title": "T", "webpage_url": "u", "duration": 5,
+                        "subtitles": {"en": [{"ext": "srt", "data": SRT}]},
+                        "automatic_captions": {}}
+
+    def handle(self, request):
+        host = request.url.host
+        self.requests.append((host, request.headers.get("cookie", "")))
+        path = request.url.path
+        if host == "b23.tv":
+            return httpx.Response(302, headers={"location": self.VIDEO_URL})
+        if host == "www.bilibili.com":
+            return httpx.Response(200, text="<html></html>")
+        if path == "/x/web-interface/nav":
+            return httpx.Response(200, json={"code": 0, "data": {"isLogin": self.login}})
+        if path == "/x/web-interface/view":
+            return httpx.Response(200, json={"code": 0, "data": {
+                "title": "测试视频", "owner": {"name": "UP主"}, "duration": 125,
+                "cid": self.pages[0]["cid"], "pages": self.pages}})
+        if path == "/x/player/wbi/v2":
+            self.player_cids.append(request.url.params.get("cid"))
+            subs = [] if len(self.player_cids) <= self.empty_lists else self.subtitles
+            return httpx.Response(200, json={
+                "code": 0, "data": {"subtitle": {"subtitles": subs}}})
+        if host.endswith(".hdslb.com"):
+            self.subtitle_fetches.append(str(request.url))
+            return httpx.Response(200, json={"body": self.subtitle_body})
+        return httpx.Response(404)
+
+    def test_is_bilibili(self):
+        for u in ("https://www.bilibili.com/video/BV1x", "https://b23.tv/abc",
+                  "https://m.bilibili.com/video/BV1x"):
+            self.assertTrue(fetcher.is_bilibili(u), u)
+        for u in ("https://www.youtube.com/watch?v=1", "https://notbilibili.com/x",
+                  "https://bilibili.com.evil.example/x"):
+            self.assertFalse(fetcher.is_bilibili(u), u)
+
+    def test_ai_subtitle_becomes_timestamped_text(self):
+        out = fetcher.fetch_video(self.VIDEO_URL)
+        self.assertTrue(out["ok"])
+        self.assertEqual(set(out), {"ok", "title", "text", "truncated"})
+        self.assertEqual(out["title"], "测试视频")
+        self.assertIn("链接：https://www.bilibili.com/video/" + self.BVID, out["text"])
+        self.assertIn("频道：UP主", out["text"])
+        self.assertIn("时长：02:05", out["text"])
+        self.assertIn("字幕：ai-zh（自动）", out["text"])
+        self.assertIn("[00:00] 你好", out["text"])
+        self.assertIn("[00:10] 世界", out["text"])
+        self.assertFalse(out["truncated"])
+        self.assertEqual(FakeYDL.opts_seen, [])  # yt-dlp never ran
+        self.assertEqual(self.player_cids, ["111"])
+
+    def test_second_page_uses_the_second_cid(self):
+        fetcher.fetch_video(self.VIDEO_URL + "?p=2")
+        self.assertEqual(self.player_cids, ["222"])
+
+    def test_manual_chinese_beats_ai_zh(self):
+        self.subtitles = [
+            {"lan": "ai-zh", "subtitle_url": f"//{self.SUB_HOST}/ai.json"},
+            {"lan": "zh-CN", "subtitle_url": f"//{self.SUB_HOST}/manual.json"},
+        ]
+        out = fetcher.fetch_video(self.VIDEO_URL)
+        self.assertIn("字幕：zh-CN（人工）", out["text"])
+        self.assertEqual(self.subtitle_fetches, [f"https://{self.SUB_HOST}/manual.json"])
+
+    def test_logged_out_says_the_cookies_expired(self):
+        self.login = False
+        with self.assertRaises(ValueError) as ctx:
+            fetcher.fetch_bilibili(self.VIDEO_URL, 1000)
+        self.assertIn("重新导出 cookies", str(ctx.exception))
+        self.assertNotIn("fake-sessdata", str(ctx.exception))
+
+    def test_logged_out_falls_back_to_ytdlp(self):
+        self.login = False
+        out = fetcher.fetch_video(self.VIDEO_URL)
+        self.assertTrue(out["ok"])  # the fake yt-dlp has an English track
+        self.assertEqual(len(FakeYDL.opts_seen), 1)
+        self.assertNotIn("cookiefile", FakeYDL.opts_seen[0])
+
+    def test_both_failures_are_reported(self):
+        self.login = False
+        FakeYDL.info = RuntimeError("Unable to download JSON metadata")
+        with self.assertRaises(ValueError) as ctx:
+            fetcher.fetch_video(self.VIDEO_URL)
+        message = str(ctx.exception)
+        self.assertIn("重新导出 cookies", message)
+        self.assertIn("读取视频失败", message)
+
+    def test_yt_dlp_never_gets_a_cookie_file(self):
+        self.login = False  # force the fallback
+        fetcher.fetch_video(self.VIDEO_URL)
+        self.assertTrue(FakeYDL.opts_seen)
+        for opts in FakeYDL.opts_seen:
+            self.assertNotIn("cookiefile", opts)
+
+    def test_no_cookie_file_skips_the_bilibili_api(self):
+        os.environ["BILIBILI_COOKIES"] = os.path.join(self.cookie_dir, "missing.txt")
+        with mock.patch.object(fetcher, "fetch_bilibili") as api:
+            out = fetcher.fetch_video(self.VIDEO_URL)
+        api.assert_not_called()
+        self.assertTrue(out["ok"])
+
+    def test_non_bilibili_links_never_use_the_bilibili_api(self):
+        with mock.patch.object(fetcher, "fetch_bilibili") as api:
+            out = fetcher.fetch_video("https://youtu.be/abc")
+        api.assert_not_called()
+        self.assertTrue(out["ok"])
+        self.assertTrue(all("cookiefile" not in o for o in FakeYDL.opts_seen))
+
+    def test_missing_bv_is_an_error(self):
+        with self.assertRaises(ValueError) as ctx:
+            fetcher.fetch_bilibili("https://www.bilibili.com/video/av12345", 1000)
+        self.assertIn("BV", str(ctx.exception))
+
+    def test_no_subtitle_is_an_error(self):
+        self.subtitles = []
+        with self.assertRaises(ValueError) as ctx:
+            fetcher.fetch_bilibili(self.VIDEO_URL, 1000)
+        self.assertIn("没有字幕", str(ctx.exception))
+        self.assertEqual(len(self.player_cids), fetcher.BILIBILI_SUB_TRIES)
+
+    def test_flaky_empty_subtitle_list_is_retried(self):
+        # B站 often answers with an empty list for a video that has subtitles.
+        self.empty_lists = 2
+        out = fetcher.fetch_bilibili(self.VIDEO_URL, 1000)
+        self.assertIn("[00:00] 你好", out["text"])
+        self.assertEqual(len(self.player_cids), 3)
+
+    def test_cookies_only_go_to_bilibili_hosts(self):
+        out = fetcher.fetch_video("https://b23.tv/abcd")
+        self.assertTrue(out["ok"])
+        hosts = {h for h, _ in self.requests}
+        self.assertIn("b23.tv", hosts)
+        self.assertIn("api.bilibili.com", hosts)
+        self.assertIn(self.SUB_HOST, hosts)
+        for host, cookie in self.requests:
+            allowed = host == "api.bilibili.com" or host.endswith(".hdslb.com")
+            if not allowed:
+                self.assertNotIn("SESSDATA", cookie, host)
+        # the API really did get them (otherwise the test above proves nothing)
+        self.assertTrue(any("SESSDATA" in cookie for host, cookie in self.requests
+                            if host == "api.bilibili.com"))
+
+    def test_client_follows_the_proxy_with_browser_headers(self):
+        c = self._real_bilibili_client()
+        self.addCleanup(c.close)
+        self.assertTrue(c.trust_env)
+        self.assertEqual(c.timeout.connect, 30)
+        self.assertIn("Mozilla", c.headers["user-agent"])
+        self.assertEqual(c.headers["referer"], "https://www.bilibili.com/")
+
+
 class FetchVideoTests(FakeYtdlpMixin):
     def info(self, **kw):
         info = {

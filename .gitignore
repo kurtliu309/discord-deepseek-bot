@@ -18,3 +18,6 @@ venv/
 data/
 data-staging/
 data-backup-*/
+
+# login cookies for the fetcher (Bվ throwaway account); never commit
+secrets/

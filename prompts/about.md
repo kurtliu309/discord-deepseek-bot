@@ -10,6 +10,8 @@ docker-compose.yml, egress/).
 Newest first. Same as the "What's new" box on the guide page. When asked what changed or
 what's new, answer from this list.
 
+- **v4.2 · 2026-11-15**
+  - Bilibili videos are read with their AI subtitles (through a throwaway account).
 - **v4.1 · 2026-11-15**
   - Links from any video site yt-dlp knows (YouTube, Bilibili, Vimeo and many more) are
     now read as video (title + subtitles), not only YouTube and Bilibili. When the

@@ -149,7 +149,9 @@ services:
     extra_hosts: *no-host-names
 
   # Keyless fetcher: web pages, RSS, file parsing. NO env_file: it must never see a secret
-  # (fetcher.py also refuses to start if one is present).
+  # (fetcher.py also refuses to start if one is present). Its one credential is the cookie
+  # file of a throwaway B站 account (Kurt agreed 2026-11-15), mounted read-only and used
+  # for bilibili links only, so B站 AI subtitles can be read. It is the only mount.
   fetcher:
     <<: *hardening
     image: discord-deepseek-bot:local
@@ -163,6 +165,14 @@ services:
       HTTP_PROXY: http://egress:3128
       https_proxy: http://egress:3128
       http_proxy: http://egress:3128
+      BILIBILI_COOKIES: /run/secrets/bilibili-cookies.txt
+    volumes:
+      - type: bind
+        source: ./secrets/bilibili-cookies.txt
+        target: /run/secrets/bilibili-cookies.txt
+        read_only: true
+        bind:
+          create_host_path: false
     user: "10001:10001"
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777

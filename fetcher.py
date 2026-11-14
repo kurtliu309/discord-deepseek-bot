@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Keyless fetcher: the only component that reads arbitrary web pages and parses files.
 
-It holds NO secrets. bot / scheduler hand it a URL or file bytes over the internal network
-and get plain text back. All its outbound traffic goes through the egress proxy, which lets
-it reach any public host on 443 but still blocks private / loopback / link-local ranges.
+It holds no bot / model keys. bot / scheduler hand it a URL or file bytes over the internal
+network and get plain text back. All its outbound traffic goes through the egress proxy,
+which lets it reach any public host on 443 but still blocks private / loopback / link-local
+ranges. The one credential it has is a throwaway B站 account's cookie file, mounted
+read-only and sent to B站's own API only (see fetch_bilibili).
 Parsers (pdf, docx, xlsx, pptx) run only here, so a malicious file cannot reach a secret.
 
 Endpoints (JSON in / JSON out, listen on :8080):
@@ -12,7 +14,9 @@ Endpoints (JSON in / JSON out, listen on :8080):
   POST /file?name=<fn>   raw bytes (<= 10 MB)               -> same shape
   POST /video            {"url": str, "max_chars": int}     -> same shape (public subtitles only)
                          yt-dlp reads the video metadata and its public subtitle track through
-                         the egress proxy; no audio download, no ffmpeg, no ASR, no cookies.
+                         the egress proxy; no audio download, no ffmpeg, no ASR, and yt-dlp
+                         never gets cookies. B站 links use B站's own API with the throwaway
+                         account's cookies when that file is mounted.
   POST /read             {"url": str, "max_chars": int}     -> same shape plus "kind": "video" | "page"
                          Decides by itself: a URL that a site-specific yt-dlp extractor knows
                          is read as a video; anything else as a page. A video whose subtitles
@@ -33,6 +37,7 @@ import sys
 import time
 import zipfile
 from html.parser import HTMLParser
+from http.cookiejar import MozillaCookieJar
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -589,11 +594,29 @@ def format_video(title, url, uploader, duration, lang, kind, cues):
 
 def fetch_video(url, max_chars=VIDEO_CHARS):
     """A video's public subtitles as timestamped text. Raises ValueError with a
-    model-readable reason when it cannot be read."""
+    model-readable reason when it cannot be read.
+
+    B站 links go through B站's own API first (it has the AI subtitles), falling back to
+    yt-dlp without cookies; every other site goes straight to yt-dlp.
+    """
     url = check_video_url(url)
     limit = clamp_int(max_chars, MAX_CHARS_MIN, MAX_CHARS_MAX, VIDEO_CHARS)
-    opts = video_opts()
+    bili_error = None
+    if is_bilibili(url) and bilibili_cookie_file():
+        try:
+            return fetch_bilibili(url, limit)
+        except Exception as e:
+            bili_error = str(e).strip() or type(e).__name__
+            log(f"bilibili api: {bili_error[:200]}")
+    try:
+        return _fetch_video(url, limit, video_opts())
+    except ValueError as e:
+        if bili_error:
+            raise ValueError(f"{e}（B站接口也不行：{bili_error}）") from e
+        raise
 
+
+def _fetch_video(url, limit, opts):
     try:
         with yt_dlp.YoutubeDL({**opts, "writesubtitles": True}) as ydl:
             info = _single_entry(ydl.extract_info(url, download=False))
@@ -621,6 +644,189 @@ def fetch_video(url, max_chars=VIDEO_CHARS):
     uploader = info.get("uploader") or info.get("channel") or info.get("creator") or ""
     final_url = info.get("webpage_url") or url
     duration = info.get("duration") or cues[-1][1]
+    text, truncated = cap(format_video(title, final_url, uploader, duration, lang, kind, cues), limit)
+    return {"ok": True, "title": title[:300], "text": text, "truncated": truncated}
+
+
+# --------------------------------------------------------------------------- #
+# B站: subtitles from B站's own API, with the cookies of a throwaway account.
+#
+# yt-dlp with these cookies gets 403 from B站 and without them only sees danmaku, so B站
+# links use its web API instead. The cookies (mounted read-only at BILIBILI_COOKIES) are
+# sent to api.bilibili.com and *.hdslb.com (subtitle files) only — never to b23.tv or any
+# other host — and their values are never logged.
+# --------------------------------------------------------------------------- #
+BILIBILI_HOSTS = ("bilibili.com", "b23.tv")
+BILIBILI_API = "https://api.bilibili.com"
+BILIBILI_HEADERS = {
+    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                   "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"),
+    "Referer": "https://www.bilibili.com/",
+}
+BV_RE = re.compile(r"BV[0-9A-Za-z]{10}")
+BILIBILI_SUB_TRIES = 6
+BILIBILI_SUB_WAIT = 0.5  # seconds between subtitle-list attempts
+
+
+def is_bilibili(url) -> bool:
+    host = (urlparse(url or "").hostname or "").lower()
+    return any(host == h or host.endswith("." + h) for h in BILIBILI_HOSTS)
+
+
+def bilibili_cookie_file():
+    """Path of the mounted cookie file, or None when it isn't configured."""
+    path = os.environ.get("BILIBILI_COOKIES", "").strip()
+    return path if path and os.path.isfile(path) else None
+
+
+def bilibili_client():
+    # trust_env: picks up HTTPS_PROXY (the egress), like client().
+    return httpx.Client(timeout=30, follow_redirects=False, headers=BILIBILI_HEADERS,
+                        trust_env=True)
+
+
+def _bilibili_cookies(jar, url):
+    """The jar's cookies, but only for the hosts they are meant for."""
+    host = (urlparse(url or "").hostname or "").lower()
+    if host == "api.bilibili.com" or host.endswith(".hdslb.com"):
+        return {c.name: c.value for c in jar}
+    return {}
+
+
+def _bili_json(response):
+    response.raise_for_status()
+    try:
+        data = response.json()
+    except ValueError as e:
+        raise ValueError("B站接口返回的不是 JSON") from e
+    if not isinstance(data, dict):
+        raise ValueError("B站接口返回的不是 JSON")
+    return data
+
+
+def _bili_get(c, jar, url, params=None):
+    return _bili_json(c.get(url, params=params, cookies=_bilibili_cookies(jar, url)))
+
+
+def _bili_data(payload, what):
+    if payload.get("code") not in (0, "0"):
+        detail = str(payload.get("message") or "")[:100]
+        raise ValueError(f"B站接口报错（{what}，code {payload.get('code')}）：{detail or '未知原因'}")
+    return payload.get("data") or {}
+
+
+def bilibili_page(url):
+    """The ``?p=N`` page number of a B站 link (1 by default)."""
+    raw = (parse_qs(urlparse(url).query).get("p") or ["1"])[0]
+    try:
+        return max(1, int(raw))
+    except (TypeError, ValueError):
+        return 1
+
+
+def pick_bilibili_subtitle(subtitles):
+    """Manual Chinese > ai-zh > any other manual > any other ai-zh variant > other ai."""
+    def rank(item):
+        lan = (item.get("lan") or "").strip().lower()
+        if lan.startswith("zh") and not lan.startswith("ai-"):
+            return 0
+        if lan.startswith("ai-zh"):
+            return 1
+        if not lan.startswith("ai-"):
+            return 2
+        return 3
+
+    usable = [s for s in subtitles or [] if isinstance(s, dict) and (s.get("subtitle_url") or "")]
+    return min(usable, key=rank) if usable else None
+
+
+def resolve_b23(c, url):
+    """The real URL behind a b23.tv short link, resolved without cookies: b23.tv never
+    gets them."""
+    host = (urlparse(url or "").hostname or "").lower()
+    if host != "b23.tv" and not host.endswith(".b23.tv"):
+        return url
+    r = c.get(url, follow_redirects=True)  # no cookies on purpose
+    r.raise_for_status()
+    return https(str(r.url))
+
+
+def fetch_bilibili(url, limit):
+    """A B站 video's subtitles through B站's own API. Raises ValueError with a
+    model-readable reason when it cannot be read; fetch_video then tries yt-dlp."""
+    path = bilibili_cookie_file()
+    if not path:
+        raise ValueError("没有配置 B 站 cookies")
+    jar = MozillaCookieJar(path)
+    try:
+        jar.load(ignore_discard=True, ignore_expires=True)  # read-only: never written back
+    except OSError as e:
+        raise ValueError(f"读不了 B 站 cookies 文件：{type(e).__name__}") from e
+
+    with bilibili_client() as c:
+        final_url = resolve_b23(c, url)
+        if not is_bilibili(final_url):
+            raise ValueError(f"短链跳到了不是 B 站的网址：{urlparse(final_url).hostname or '?'}")
+        m = BV_RE.search(urlparse(final_url).path)
+        if not m:
+            raise ValueError("这个链接里没有 BV 号（只支持 BV 号视频）")
+        bvid = m.group(0)
+
+        nav = _bili_json(c.get(f"{BILIBILI_API}/x/web-interface/nav",
+                               cookies=_bilibili_cookies(jar, BILIBILI_API)))
+        if not (nav.get("data") or {}).get("isLogin"):
+            log("bilibili cookies: not logged in")
+            raise ValueError("B站登录已过期，需要重新导出 cookies")
+
+        view = _bili_data(_bili_get(c, jar, f"{BILIBILI_API}/x/web-interface/view",
+                                    {"bvid": bvid}), "视频信息")
+        pages = view.get("pages") or []
+        page = bilibili_page(final_url)
+        if pages:
+            if page > len(pages):
+                raise ValueError(f"这个视频没有第 {page} P")
+            cid = (pages[page - 1] or {}).get("cid")
+        elif page > 1:
+            raise ValueError(f"这个视频没有第 {page} P")
+        else:
+            cid = view.get("cid")
+        if not cid:
+            raise ValueError("B站接口没有给出 cid")
+
+        # B站 hands back an empty subtitle list on a good share of requests for a video
+        # that does have one (seen 2026-11-15: 1 in 3 calls had ai-zh), so ask again a
+        # few times before calling it "no subtitles".
+        chosen = None
+        for attempt in range(BILIBILI_SUB_TRIES):
+            if attempt:
+                time.sleep(BILIBILI_SUB_WAIT)
+            player = _bili_data(_bili_get(c, jar, f"{BILIBILI_API}/x/player/wbi/v2",
+                                          {"bvid": bvid, "cid": cid}), "字幕列表")
+            chosen = pick_bilibili_subtitle((player.get("subtitle") or {}).get("subtitles"))
+            if chosen:
+                break
+        if not chosen:
+            raise ValueError("这个视频没有字幕")
+        lang = (chosen.get("lan") or "").strip()
+        sub_url = chosen.get("subtitle_url") or ""
+        if sub_url.startswith("//"):
+            sub_url = "https:" + sub_url
+        body = _bili_json(c.get(sub_url, cookies=_bilibili_cookies(jar, sub_url)))
+
+    cues = []
+    for item in body.get("body") or []:
+        text = _join_parts([str(item.get("content") or "")])
+        if not text:
+            continue
+        start = float(item.get("from") or 0)
+        cues.append((start, max(float(item.get("to") or start), start), text))
+    if not cues:
+        raise ValueError("这个视频没有字幕")
+
+    kind = "auto" if lang.lower().startswith("ai-") else "manual"
+    title = view.get("title") or ""
+    uploader = (view.get("owner") or {}).get("name") or ""
+    duration = view.get("duration") or cues[-1][1]
     text, truncated = cap(format_video(title, final_url, uploader, duration, lang, kind, cues), limit)
     return {"ok": True, "title": title[:300], "text": text, "truncated": truncated}
 

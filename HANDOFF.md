@@ -9,6 +9,8 @@ updated: 2026-11-14
 
 结论：**v3.0（多群配置）代码完成，在分支 `v3`，测试栈在 `#bot-test` 跑着，等 Kurt 验收**。正式 bot（TiredFX Guy）仍是 v2，没动过。v3.1 工具容器、v3.2 新闻素材都已做完并单独测通，还没接进 bot。
 
+> **2026-11-15 v4.2 已上线，未推送（Kurt 说推送先不急）**：B 站字幕走 B 站自己的接口（小号 cookies，`secrets/bilibili-cookies.txt` 只读挂进 fetcher，只发给 `api.bilibili.com`/`*.hdslb.com`；yt-dlp 永不带 cookies，因为带了会 403）。B 站字幕列表接口时有时无（同一请求约 1/3 有），代码重试 6 次。实测热门 6 个里 2 个读到 AI 字幕，其余 20 次都没有＝真没字幕。cookies 过期时 bot 会说"需要重新导出"（重新扫码登录 → Get cookies.txt LOCALLY 导出覆盖同一文件 → 重启 fetcher）。**部署坑**：fetcher 没有自己的 build，`up --build fetcher` 不会重建镜像；要 `docker compose build bot` 再 `up -d bot fetcher`。
+>
 > **2026-11-15 v4.1 已上线**（镜像 `:v4.1`，回滚 `:v4.0.1` / `:v4.0` / `:v3.6`）：fetcher `/read` 用 yt-dlp 的 extractor 不联网判断是不是视频，视频读不到字幕就退回读网页并在开头注明原因；模型只有 `read`（+ 搜索开关开时的 `search`）。v4.0.1 修了 YouTube 字幕 429（原来优先拿机翻中文轨）。**待 Kurt 定**：B 站小号 cookies（推荐先做，要改"fetcher 无密钥"规则）/ Whisper（CPU 放 fetcher，先不做）；D（网页里嵌的视频）Kurt 定不做。Kurt 在 fetch-and-summarize skill 里也有同样的机翻优先问题，问过要不要改，还没回。
 >
 > **2026-11-15 v4.0 已上线正式栈，Kurt 说直接上线（没等 `#bot-test` 验收）**；`v4.0` 已快进合进 `main` 并推送（b6c05b5），说明页随之更新。正式栈现在 4 个容器（bot、scheduler、fetcher、egress），镜像 `:local` = `:v4.0`；回滚：`docker tag discord-deepseek-bot:v3.6 discord-deepseek-bot:local` 后切回 `v3` 分支的 compose 再 `docker compose up -d`；部署前数据备份 `data-backup-20261115-pre-v4\`。上线后冒烟：读网页、YouTube 字幕正常，B 站无字幕（预期，不带 cookies）。頭腦警察搜索默认关，要在 `/setup` 打开。
