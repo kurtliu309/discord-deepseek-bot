@@ -10,6 +10,11 @@ docker-compose.yml, egress/).
 Newest first. Same as the "What's new" box on the guide page. When asked what changed or
 what's new, answer from this list.
 
+- **v4.0.1 · 2026-11-15**
+  - A pasted YouTube / Bilibili link is now read as a video (title + subtitles) instead
+    of as a web page, which only gave the site footer.
+  - Subtitles: real (manual) subtitles first, then the video's own automatic captions;
+    YouTube's machine-translated tracks only as a last resort (they were getting HTTP 429).
 - **v4.0 · 2026-11-15**
   - Web search now uses DeepSeek's built-in search, so results are much better.
   - The separate `tools` and SearXNG containers are gone. Reading pages and video

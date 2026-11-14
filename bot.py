@@ -714,6 +714,19 @@ def strip_url_trailing(url):
     return url
 
 
+_VIDEO_URL_RE = re.compile(
+    r"^https?://(?:(?:www|m|music)\.)?(?:"
+    r"youtube\.com/(?:watch\?|shorts/|live/|embed/)|youtu\.be/"
+    r"|bilibili\.com/video/|b23\.tv/)",
+    re.IGNORECASE,
+)
+
+
+def is_video_url(url) -> bool:
+    """YouTube / Bilibili video links, which the fetcher reads via ``/video``."""
+    return bool(_VIDEO_URL_RE.match(str(url or "").strip()))
+
+
 def find_urls(text, max_urls: int = MAX_URLS):
     """Extract up to ``max_urls`` http(s) URLs from a message."""
     out = []
@@ -1721,8 +1734,11 @@ class Bot(discord.Client):
         return (j.get("text") or "", bool(j.get("truncated", False)))
 
     async def _fetcher_url(self, url):
+        # A pasted video link is read as a video (title + subtitles): the page itself is a
+        # script-rendered shell whose text is only the site footer.
+        path = "/video" if is_video_url(url) else "/url"
         try:
-            resp = await self.fetcher.post("/url", json={"url": url})
+            resp = await self.fetcher.post(path, json={"url": url})
             j = resp.json()
         except Exception:
             return None

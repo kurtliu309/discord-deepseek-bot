@@ -98,18 +98,34 @@ class FakeYtdlpMixin(unittest.TestCase):
 # Pure subtitle helpers (moved from tools/tests/test_server.py, guild bits dropped)
 # --------------------------------------------------------------------------- #
 class SubtitleChoiceTests(unittest.TestCase):
-    def test_language_order_manual_and_auto_together(self):
-        # zh-Hans is preferred over en, even when it is only the automatic track.
-        subs = {"en": [{"ext": "vtt", "url": "u"}]}
-        auto = {"zh-Hans": [{"ext": "json3", "url": "v"}]}
-        kind, lang, entry = fetcher.pick_subtitle(subs, auto)
-        self.assertEqual((kind, lang, entry["ext"]), ("auto", "zh-Hans", "json3"))
+    def test_language_order_within_manual(self):
+        # Among tracks of the same kind, zh-Hans is still preferred over en.
+        subs = {"en": [{"ext": "vtt", "url": "u"}], "zh-Hans": [{"ext": "json3", "url": "v"}]}
+        kind, lang, entry = fetcher.pick_subtitle(subs, {})
+        self.assertEqual((kind, lang, entry["ext"]), ("manual", "zh-Hans", "json3"))
 
     def test_manual_wins_at_same_language(self):
         subs = {"en": [{"ext": "vtt", "url": "u"}]}
         auto = {"en": [{"ext": "json3", "url": "v"}]}
         kind, lang, _ = fetcher.pick_subtitle(subs, auto)
         self.assertEqual((kind, lang), ("manual", "en"))
+
+    def test_manual_english_beats_auto_chinese(self):
+        # An English video: real English subtitles must win over YouTube's auto track.
+        subs = {"en": [{"ext": "json3", "url": "https://yt/timedtext?lang=en"}]}
+        auto = {"zh-Hans": [{"ext": "json3", "url": "https://yt/timedtext?lang=en&tlang=zh-Hans"}]}
+        self.assertEqual(fetcher.pick_subtitle(subs, auto)[:2], ("manual", "en"))
+
+    def test_original_auto_beats_machine_translation(self):
+        auto = {
+            "zh-Hans": [{"ext": "json3", "url": "https://yt/timedtext?lang=en&kind=asr&tlang=zh-Hans"}],
+            "en": [{"ext": "json3", "url": "https://yt/timedtext?lang=en&kind=asr"}],
+        }
+        self.assertEqual(fetcher.pick_subtitle({}, auto)[:2], ("auto", "en"))
+
+    def test_translation_is_the_last_resort(self):
+        auto = {"zh-Hans": [{"ext": "json3", "url": "https://yt/timedtext?lang=ja&tlang=zh-Hans"}]}
+        self.assertEqual(fetcher.pick_subtitle({}, auto)[:2], ("auto", "zh-Hans"))
 
     def test_danmaku_is_not_a_subtitle(self):
         subs = {"danmaku": [{"ext": "xml", "url": "d"}]}

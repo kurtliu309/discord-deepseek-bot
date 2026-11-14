@@ -35,9 +35,10 @@ class FakeFetcher:
         self.file_calls = []
 
     async def post(self, path, json=None, params=None, content=None):
-        if path == "/url":
+        if path in ("/url", "/video"):
             url = json["url"]
             self.url_calls.append(url)
+            self.paths = getattr(self, "paths", []) + [path]
             if self.fail or url not in self.urls:
                 return Resp({"ok": False})
             title, text = self.urls[url]
@@ -97,6 +98,25 @@ class FakeBot(bot.Bot):
     def __init__(self, fetcher=None):
         self.fetcher = fetcher or FakeFetcher()
         self.config = SimpleNamespace(owner_id=1)
+
+
+class TestVideoLinks(unittest.IsolatedAsyncioTestCase):
+    def test_is_video_url(self):
+        for u in ("https://www.youtube.com/watch?v=abc", "https://youtu.be/abc",
+                  "https://m.youtube.com/shorts/abc", "https://www.bilibili.com/video/BV1x",
+                  "https://b23.tv/xyz"):
+            self.assertTrue(bot.is_video_url(u), u)
+        for u in ("https://www.youtube.com/@someone", "https://example.com/watch?v=1",
+                  "https://www.bilibili.com/read/cv1", "https://notyoutube.com/watch?v=1"):
+            self.assertFalse(bot.is_video_url(u), u)
+
+    async def test_pasted_video_link_goes_to_video_endpoint(self):
+        yt, page = "https://www.youtube.com/watch?v=abc", "https://example.com/x"
+        fetcher = FakeFetcher(urls={yt: ("Video", "[00:01] hi"), page: ("Page", "text")})
+        fake = FakeBot(fetcher)
+        data, _ = await bot.Bot.gather_data(fake, msg(1, content=f"{yt} and {page}"), cfg=cfg())
+        self.assertEqual(fetcher.paths, ["/video", "/url"])
+        self.assertIn("[00:01] hi", data)
 
 
 class TestGatherDataV34(unittest.IsolatedAsyncioTestCase):

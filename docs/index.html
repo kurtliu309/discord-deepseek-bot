@@ -159,12 +159,13 @@ footer { padding-block: 24px 40px; border-top: 1px solid var(--line); color: var
 <div class="wrap">
   <aside class="news" aria-labelledby="news-title">
     <div class="news-head">
-      <span class="tag">v4.0</span>
+      <span class="tag">v4.0.1</span>
       <h2 id="news-title"><span class="en">What's new</span><span class="zh">版本更新</span></h2>
       <time datetime="2026-11-15">2026-11-15</time>
     </div>
     <ul>
-      <li><span class="en">Web search now uses DeepSeek's built-in search, so results are much better. The separate tools and SearXNG containers are gone; reading pages and video subtitles moved into the fetcher. Trust levels and the "read links" switch are removed — links are always read. A single "Web search" switch in <code>/setup</code> can be turned on or off by the owner and server admins.</span><span class="zh">搜索改用 DeepSeek 自带的搜索，结果好多了。单独的 tools 和 SearXNG 容器已经删掉；读网页、读视频字幕并进了 fetcher。信任等级和“读链接”开关删掉了——链接一直都会读。<code>/setup</code> 里只剩一个“搜索”开关，owner 和群管理员都能开关。</span></li>
+      <li><span class="en">Fix: a pasted YouTube or Bilibili link is now read as a video (title + subtitles) instead of as a web page. Real subtitles are picked before automatic ones, and YouTube's machine translations only as a last resort, which were often blocked with HTTP 429.</span><span class="zh">修复：贴来的 YouTube、B 站链接现在按视频读（标题加字幕），不再当网页读。优先用人工字幕，其次是视频原语言的自动字幕，YouTube 机器翻译的字幕放到最后——之前常被 429 挡住的就是它。</span></li>
+      <li><span class="en"><b>v4.0</b> — Web search now uses DeepSeek's built-in search, so results are much better. The separate tools and SearXNG containers are gone; reading pages and video subtitles moved into the fetcher. Trust levels and the "read links" switch are removed — links are always read. A single "Web search" switch in <code>/setup</code> can be turned on or off by the owner and server admins.</span><span class="zh"><b>v4.0</b> — 搜索改用 DeepSeek 自带的搜索，结果好多了。单独的 tools 和 SearXNG 容器已经删掉；读网页、读视频字幕并进了 fetcher。信任等级和“读链接”开关删掉了——链接一直都会读。<code>/setup</code> 里只剩一个“搜索”开关，owner 和群管理员都能开关。</span></li>
     </ul>
     <details>
       <summary><span class="en">Earlier versions</span><span class="zh">更早的版本</span></summary>

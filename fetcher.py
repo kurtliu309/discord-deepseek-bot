@@ -380,22 +380,27 @@ def pick_subtitle(subtitles, automatic_captions):
     auto = {k: v for k, v in (automatic_captions or {}).items()
             if not _norm_lang(k).startswith("danmaku")}
 
-    for lang in PREFERRED_LANGS:
-        entry = _choose_entry(_find_lang(manual, lang))
-        if entry:
-            return "manual", lang, entry
-        entry = _choose_entry(_find_lang(auto, lang))
-        if entry:
-            return "auto", lang, entry
-    for lang, entries in manual.items():
-        entry = _choose_entry(entries)
-        if entry:
-            return "manual", lang, entry
-    for lang, entries in auto.items():
-        entry = _choose_entry(entries)
-        if entry:
-            return "auto", lang, entry
+    # Order (v4.0 fix): any manual track beats any automatic one, and the video's own
+    # automatic captions beat YouTube's machine translations of them. Translated tracks
+    # (``tlang=`` in the URL) are generated on demand and are what YouTube answers with
+    # 429 most often; the model can translate by itself, so they are the last resort.
+    original = {k: v for k, v in auto.items() if not _is_translated(v)}
+    translated = {k: v for k, v in auto.items() if _is_translated(v)}
+    for kind, pool in (("manual", manual), ("auto", original), ("auto", translated)):
+        for lang in PREFERRED_LANGS:
+            entry = _choose_entry(_find_lang(pool, lang))
+            if entry:
+                return kind, lang, entry
+        for lang, entries in pool.items():
+            entry = _choose_entry(entries)
+            if entry:
+                return kind, lang, entry
     return None
+
+
+def _is_translated(entries):
+    """True for a YouTube auto-translated caption track (its URLs carry ``tlang=``)."""
+    return any("tlang=" in str((e or {}).get("url") or "") for e in entries or [])
 
 
 _SRT_TIME = re.compile(
@@ -643,7 +648,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, fetch_url(req.get("url") or "", max_chars))
             if u.path == "/video":
                 req = json.loads(body)
-                return self._send(200, fetch_video(req.get("url") or "", req.get("max_chars")))
+                res = fetch_video(req.get("url") or "", req.get("max_chars"))
+                if not res.get("ok"):
+                    # Host only (no path / query): enough to spot 429s without logging links.
+                    host = urlparse(req.get("url") or "").hostname or "?"
+                    log(f"video {host}: {str(res.get('error'))[:200]}")
+                return self._send(200, res)
             if u.path == "/file":
                 name = (parse_qs(u.query).get("name") or ["file"])[0][:200]
                 text, truncated = cap(parse_file(name, body))
