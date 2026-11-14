@@ -9,6 +9,8 @@ updated: 2026-11-14
 
 结论：**v3.0（多群配置）代码完成，在分支 `v3`，测试栈在 `#bot-test` 跑着，等 Kurt 验收**。正式 bot（TiredFX Guy）仍是 v2，没动过。v3.1 工具容器、v3.2 新闻素材都已做完并单独测通，还没接进 bot。
 
+> **2026-11-15 进行中：v3.7 上网简化**（分支 `v3.7`）。决定全文见 [docs/notes/deepseek-server-search.md](docs/notes/deepseek-server-search.md)：搜索改 DeepSeek 自带、删 SearXNG/tools/MCP、读网页读视频并进 fetcher、删信任等级和"读链接"开关、只留管理员也能改的"搜索"开关。下面"搜索 API 比较""待定设计 A/B"两条作废。测试在頭腦警察 `#bot-test`。
+
 > **2026-11-14 晚的跨群事故已经处理完**，详见 [docs/notes/2026-11-14-cross-guild.md](docs/notes/2026-11-14-cross-guild.md)。
 > - FX 的记忆已挪回 `1537280083830775820/`。頭腦警察从空白开始，频道已清空，等 Kurt 用 `/setup` 选频道。
 > - scheduler 发帖前会检查频道属于哪个群（已上线）。

@@ -15,6 +15,25 @@ updated: 2026-11-15
 - 同样方式带 `web_fetch_20250910` → **422**，服务端读网页不支持。
 - 实测脚本在那次会话的 scratchpad，已丢；照上面的请求体重写即可（密钥从环境变量读，别打印）。
 
+## 第二次实测（2026-11-15，从正式 bot 容器里发，经现有 egress）
+
+- 不用改 allowlist：bot 容器本来就能到 `api.deepseek.com`，`/anthropic/v1/messages` 直接 200。
+- 搜 "Houdini 22 发布了吗"：结果全是 sidefx.com、cgchannel、80.lv、digitalproduction，比 SearXNG（魔术师维基、AirPods）好得多。
+- `allowed_domains: ["sidefx.com"]` **被忽略**，照样返回别的站。按群限制域名做不到，只能靠"只有 owner 群有搜索"。
+- 一问两次搜索：输入约 1 万 token，输出约 700。
+
+## Kurt 的决定（2026-11-15）→ v3.7
+
+- 搜索改用 DeepSeek 自带的；删 SearXNG、tools 容器、MCP。读网页、读视频字幕并进 fetcher（唯一读外部内容的容器，无密钥）。
+- **删 public/owner 信任等级**。
+- **读网页一直开**：贴来的链接代码照旧先读好喂给模型；模型自己也随时有 `read_page` / `read_video`。"读链接"开关删掉。
+- **只留一个"搜索"开关**（配置里仍是 `tools.on`），**Kurt 和群管理员都能开关**；新群默认关，私信默认开。
+- 删 `allow_domains`（DeepSeek 搜索不理会域名限制）。
+- 额度照旧，大家都能改，Kurt 说不用管。
+- 实现取最小改动：工具循环仍用 OpenAI 格式；`search` 工具的实现是另调一次 DeepSeek Anthropic 接口（带 `web_search`，`max_uses` 2），把带出处的结果文字当工具结果返回。
+- 测试群：頭腦警察 `#bot-test`（正式 bot）。
+- 为什么不学日报让 bot 自己上网：bot 拿着 token、对陌生人，自己抓网页就得把出网白名单开到任意域名；fetcher 无密钥这条要守住。
+
 ## 改动会落在哪
 
 - 现在：`bot.py` 用 `openai.AsyncOpenAI(base_url="https://api.deepseek.com")`（OpenAI 格式）；搜索在 `tools/server.py` 里调 SearXNG（`SEARXNG_URL`）。
