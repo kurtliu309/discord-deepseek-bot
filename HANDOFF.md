@@ -9,6 +9,8 @@ updated: 2026-11-14
 
 结论：**v3.0（多群配置）代码完成，在分支 `v3`，测试栈在 `#bot-test` 跑着，等 Kurt 验收**。正式 bot（TiredFX Guy）仍是 v2，没动过。v3.1 工具容器、v3.2 新闻素材都已做完并单独测通，还没接进 bot。
 
+> **2026-11-15 v4.1 已上线**（镜像 `:v4.1`，回滚 `:v4.0.1` / `:v4.0` / `:v3.6`）：fetcher `/read` 用 yt-dlp 的 extractor 不联网判断是不是视频，视频读不到字幕就退回读网页并在开头注明原因；模型只有 `read`（+ 搜索开关开时的 `search`）。v4.0.1 修了 YouTube 字幕 429（原来优先拿机翻中文轨）。**待 Kurt 定**：B 站小号 cookies（推荐先做，要改"fetcher 无密钥"规则）/ Whisper（CPU 放 fetcher，先不做）；D（网页里嵌的视频）Kurt 定不做。Kurt 在 fetch-and-summarize skill 里也有同样的机翻优先问题，问过要不要改，还没回。
+>
 > **2026-11-15 v4.0 已上线正式栈，Kurt 说直接上线（没等 `#bot-test` 验收）**；`v4.0` 已快进合进 `main` 并推送（b6c05b5），说明页随之更新。正式栈现在 4 个容器（bot、scheduler、fetcher、egress），镜像 `:local` = `:v4.0`；回滚：`docker tag discord-deepseek-bot:v3.6 discord-deepseek-bot:local` 后切回 `v3` 分支的 compose 再 `docker compose up -d`；部署前数据备份 `data-backup-20261115-pre-v4\`。上线后冒烟：读网页、YouTube 字幕正常，B 站无字幕（预期，不带 cookies）。頭腦警察搜索默认关，要在 `/setup` 打开。
 >
 > v4.0 上网简化：决定全文见 [docs/notes/deepseek-server-search.md](docs/notes/deepseek-server-search.md)：搜索改 DeepSeek 自带、删 SearXNG/tools/MCP、读网页读视频并进 fetcher、删信任等级和"读链接"开关、只留管理员也能改的"搜索"开关。下面"搜索 API 比较""待定设计 A/B"两条作废。测试在頭腦警察 `#bot-test`。
