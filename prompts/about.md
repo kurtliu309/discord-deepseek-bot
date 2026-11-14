@@ -10,6 +10,10 @@ docker-compose.yml, egress/).
 Newest first. Same as the "What's new" box on the guide page. When asked what changed or
 what's new, answer from this list.
 
+- **v4.2.1 · 2026-11-15**
+  - Bilibili subtitles are found far more often: the bot now asks B站's older player
+    endpoint first, which answered every time when the newer one kept answering empty.
+  - A YouTube stream replay's live chat is no longer mistaken for its subtitles.
 - **v4.2 · 2026-11-15**
   - Bilibili videos are read with their AI subtitles (through a throwaway account).
 - **v4.1 · 2026-11-15**

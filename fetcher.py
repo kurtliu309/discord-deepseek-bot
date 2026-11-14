@@ -384,11 +384,15 @@ def _choose_entry(entries):
     return ranked[0][1]
 
 
+def _not_a_subtitle(key):
+    """B站 danmaku and YouTube's live-chat replay sit among the subtitles but are not."""
+    lang = _norm_lang(key)
+    return lang.startswith("danmaku") or lang.startswith("live-chat")
+
+
 def pick_subtitle(subtitles, automatic_captions):
-    manual = {k: v for k, v in (subtitles or {}).items()
-              if not _norm_lang(k).startswith("danmaku")}
-    auto = {k: v for k, v in (automatic_captions or {}).items()
-            if not _norm_lang(k).startswith("danmaku")}
+    manual = {k: v for k, v in (subtitles or {}).items() if not _not_a_subtitle(k)}
+    auto = {k: v for k, v in (automatic_captions or {}).items() if not _not_a_subtitle(k)}
 
     # Order (v4.0 fix): any manual track beats any automatic one, and the video's own
     # automatic captions beat YouTube's machine translations of them. Translated tracks
@@ -796,13 +800,22 @@ def fetch_bilibili(url, limit):
         # B站 hands back an empty subtitle list on a good share of requests for a video
         # that does have one (seen 2026-11-15: 1 in 3 calls had ai-zh), so ask again a
         # few times before calling it "no subtitles".
+        # The older x/player/v2 (by aid) answered 10/10 when wbi/v2 answered 0/10 for the
+        # same video (2026-11-15), so it goes first; wbi/v2 stays as the second try.
+        aid = view.get("aid")
+        endpoints = []
+        if aid:
+            endpoints.append(("/x/player/v2", {"aid": aid, "cid": cid}))
+        endpoints.append(("/x/player/wbi/v2", {"bvid": bvid, "cid": cid}))
         chosen = None
         for attempt in range(BILIBILI_SUB_TRIES):
             if attempt:
                 time.sleep(BILIBILI_SUB_WAIT)
-            player = _bili_data(_bili_get(c, jar, f"{BILIBILI_API}/x/player/wbi/v2",
-                                          {"bvid": bvid, "cid": cid}), "字幕列表")
-            chosen = pick_bilibili_subtitle((player.get("subtitle") or {}).get("subtitles"))
+            for path, params in endpoints:
+                player = _bili_data(_bili_get(c, jar, BILIBILI_API + path, params), "字幕列表")
+                chosen = pick_bilibili_subtitle((player.get("subtitle") or {}).get("subtitles"))
+                if chosen:
+                    break
             if chosen:
                 break
         if not chosen:
@@ -890,6 +903,8 @@ def fetch_read(url, max_chars=None):
         return {**fetch_video(url, max_chars), "kind": "video"}
     except Exception as e:
         video_error = str(e).strip() or type(e).__name__
+    # Host only, no path or query: enough to see what keeps failing without logging links.
+    log(f"read {urlparse(url).hostname or '?'}: video failed, using page ({video_error[:150]})")
 
     try:
         page = fetch_url(url, max_chars)

@@ -126,6 +126,15 @@ class SubtitleChoiceTests(unittest.TestCase):
         }
         self.assertEqual(fetcher.pick_subtitle({}, auto)[:2], ("auto", "en"))
 
+    def test_live_chat_replay_is_not_a_subtitle(self):
+        # A stream replay (seen 2026-11-15, youtu.be/R1wOlMAYCrE): the chat was taken
+        # as a manual "subtitle" and the real en-orig track was never tried.
+        subs = {"live_chat": [{"ext": "json", "url": "https://yt/live_chat"}]}
+        auto = {"en-orig": [{"ext": "json3", "url": "https://yt/timedtext?lang=en&kind=asr"}]}
+        kind, _, entry = fetcher.pick_subtitle(subs, auto)
+        self.assertEqual((kind, entry["url"]), ("auto", auto["en-orig"][0]["url"]))
+        self.assertIsNone(fetcher.pick_subtitle(subs, {}))
+
     def test_translation_is_the_last_resort(self):
         auto = {"zh-Hans": [{"ext": "json3", "url": "https://yt/timedtext?lang=ja&tlang=zh-Hans"}]}
         self.assertEqual(fetcher.pick_subtitle({}, auto)[:2], ("auto", "zh-Hans"))
@@ -247,6 +256,8 @@ class BilibiliApiTests(FakeYtdlpMixin):
                               {"from": 10, "to": 12, "content": "世界"}]
         self.pages = [{"cid": 111}, {"cid": 222}]
         self.empty_lists = 0  # how many subtitle-list answers come back empty first
+        self.aid = None  # most tests: no aid, so only wbi/v2 is asked
+        self.player_paths = []
         wait = mock.patch.object(fetcher, "BILIBILI_SUB_WAIT", 0)
         wait.start()
         self.addCleanup(wait.stop)
@@ -277,9 +288,10 @@ class BilibiliApiTests(FakeYtdlpMixin):
         if path == "/x/web-interface/view":
             return httpx.Response(200, json={"code": 0, "data": {
                 "title": "测试视频", "owner": {"name": "UP主"}, "duration": 125,
-                "cid": self.pages[0]["cid"], "pages": self.pages}})
-        if path == "/x/player/wbi/v2":
+                "aid": self.aid, "cid": self.pages[0]["cid"], "pages": self.pages}})
+        if path in ("/x/player/v2", "/x/player/wbi/v2"):
             self.player_cids.append(request.url.params.get("cid"))
+            self.player_paths.append(path)
             subs = [] if len(self.player_cids) <= self.empty_lists else self.subtitles
             return httpx.Response(200, json={
                 "code": 0, "data": {"subtitle": {"subtitles": subs}}})
@@ -379,6 +391,18 @@ class BilibiliApiTests(FakeYtdlpMixin):
             fetcher.fetch_bilibili(self.VIDEO_URL, 1000)
         self.assertIn("没有字幕", str(ctx.exception))
         self.assertEqual(len(self.player_cids), fetcher.BILIBILI_SUB_TRIES)
+
+    def test_old_player_endpoint_is_asked_first_when_there_is_an_aid(self):
+        self.aid = 999
+        out = fetcher.fetch_bilibili(self.VIDEO_URL, 1000)
+        self.assertIn("[00:00] 你好", out["text"])
+        self.assertEqual(self.player_paths, ["/x/player/v2"])
+
+    def test_wbi_endpoint_is_the_second_try(self):
+        self.aid = 999
+        self.empty_lists = 1  # v2 answers empty once, wbi/v2 then has it
+        fetcher.fetch_bilibili(self.VIDEO_URL, 1000)
+        self.assertEqual(self.player_paths, ["/x/player/v2", "/x/player/wbi/v2"])
 
     def test_flaky_empty_subtitle_list_is_retried(self):
         # B站 often answers with an empty list for a video that has subtitles.
