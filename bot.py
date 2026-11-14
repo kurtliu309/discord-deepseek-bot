@@ -66,6 +66,8 @@ MAX_ATTACHMENTS = 3
 MAX_URLS = 3
 DOC_MAX_TOKENS = 7500
 REPLY_MAX_TOKENS = 1500  # headroom: the model may spend tokens reasoning before the (short) reply
+INTERJECT_HARD_CAP = 1.0  # no persona may push the jump-in chance above this
+MAX_INTERJECT_COOLDOWN = 3600  # seconds; a persona's cooldown multiplier stops at 1 hour
 
 ALLOWED_MENTIONS = discord.AllowedMentions(
     users=True, roles=False, everyone=False, replied_user=False
@@ -529,11 +531,12 @@ def guild_context(store, interaction):
     return str(interaction.guild.id), store.get(interaction.guild.id)
 
 
-def chat_plan(body, chatty: bool = False):
+def chat_plan(body, chatty: bool = False, typing_speed: float = 1.0):
     """How to send ``body``: list of ``(action, text, delay_seconds)``.
 
     Normal style: one or more ``reply`` chunks (2000-char split). Chatty style: the
     first turn is a ``reply``, later turns are ``channel send`` after a typing pause.
+    ``typing_speed`` is the persona's multiplier for those pauses (1.0 = unchanged).
     """
     text = sanitize_output(body or "").strip()
     if not text:
@@ -549,7 +552,7 @@ def chat_plan(body, chatty: bool = False):
             if not plan:
                 plan.append(("reply", chunk, 0.0))
             else:
-                plan.append(("send", chunk, persona.typing_delay(chunk)))
+                plan.append(("send", chunk, persona.typing_delay(chunk, speed=typing_speed)))
     return plan
 
 
@@ -737,6 +740,41 @@ def is_fx_topic(text) -> bool:
     return bool(FX_TOPIC_RE.search(text or ""))
 
 
+def interject_chance(
+    base: float,
+    traits: Optional[persona.PersonaTraits],
+    fx_topic: bool = False,
+) -> float:
+    """The jump-in chance that actually applies to one message.
+
+    The persona's numbers are independent: ``chance_scale`` always multiplies the base
+    (1.0 = no change). On FX talk, only a persona that sets ``fx_multiplier`` gets a
+    boost; without one there is no FX bonus at all. The result is capped at
+    ``INTERJECT_HARD_CAP``, which no persona file can raise.
+    """
+    scale = traits.chance_scale if traits is not None else 1.0
+    chance = base * scale
+    if fx_topic and traits is not None and traits.fx_multiplier is not None:
+        chance *= traits.fx_multiplier
+    return min(INTERJECT_HARD_CAP, chance)
+
+
+def interject_burst_count(ic, traits: Optional[persona.PersonaTraits]) -> int:
+    """Messages needed in one window to trigger a burst jump-in: config x persona scale.
+
+    Only ``burst_count`` is scaled; the window stays as the server configured it. Never
+    below 1, so the threshold always means something.
+    """
+    scale = traits.burst_scale if traits is not None else 1.0
+    return max(1, int(round(ic.burst_count * scale)))
+
+
+def interject_cooldown(ic, traits: Optional[persona.PersonaTraits]) -> int:
+    """Cooldown seconds after a jump-in: the config value x the persona's scale."""
+    scale = traits.cooldown_scale if traits is not None else 1.0
+    return max(0, min(MAX_INTERJECT_COOLDOWN, int(round(ic.cooldown * scale))))
+
+
 def build_rules_card(
     cfg: GuildConfig,
     remaining=None,
@@ -744,12 +782,14 @@ def build_rules_card(
     tz=None,
     owner_name="the owner",
     user_remaining=None,
+    traits: Optional[persona.PersonaTraits] = None,
 ):
     """Short rules card for ``/rule``; never contains IDs or secrets.
 
     It shows *this guild's* settings: trust, persona/style/language, interjection
     numbers, the guild and per-person reply budgets (only the asker's own remaining),
-    quiet channels, scheduled jobs and what it may read.
+    quiet channels, scheduled jobs and what it may read. Jump-in numbers go through the
+    same functions the bot uses, so the card matches what actually happens.
     """
     ic = cfg.features.interject
     rc = cfg.features.recap
@@ -774,11 +814,19 @@ def build_rules_card(
     else:
         reply_line = "- reply: i don't answer mentions in this server. "
     if effective(cfg, "interject"):
+        chance = interject_chance(ic.chance, traits, False)
+        on_fx = interject_chance(ic.chance, traits, True)
+        cooldown = interject_cooldown(ic, traits)
+        burst = interject_burst_count(ic, traits)
+        fx_note = (
+            f" (~{on_fx:.0%} if it's Houdini/FX talk)"
+            if traits is not None and traits.fx_multiplier is not None
+            else ""
+        )
         reply_line += (
-            f"i also butt in on my own: ~{ic.chance:.0%} per message (~{ic.fx_chance:.0%} "
-            "if it's Houdini/FX talk), or when a channel fires off more "
-            f"than {ic.burst_count} messages in {ic.burst_window // 60} min — then i "
-            f"cool off for {ic.cooldown // 60} min."
+            f"i also butt in on my own: ~{chance:.0%} per message{fx_note}, "
+            f"or when a channel fires off more than {burst} messages in "
+            f"{ic.burst_window // 60} min — then i cool off for {cooldown // 60} min."
         )
     else:
         reply_line += "i don't butt in on my own here."
@@ -1162,17 +1210,16 @@ class Bot(discord.Client):
         if not effective(cfg, "interject"):
             return
         ic = settings_for(cfg, "interject")
-        chance = ic.chance
-        if is_fx_topic(message.content):
-            chance = max(ic.chance, ic.fx_chance)
+        traits = persona.load_traits(self.personas_dir, cfg.persona)
+        chance = interject_chance(ic.chance, traits, is_fx_topic(message.content))
         key = (str(message.guild.id), str(message.channel.id))
         if self.channel_activity.should_interject(
             key,
             chance,
             time.monotonic(),
-            burst_count=ic.burst_count,
+            burst_count=interject_burst_count(ic, traits),
             burst_window_seconds=ic.burst_window,
-            cooldown_seconds=ic.cooldown,
+            cooldown_seconds=interject_cooldown(ic, traits),
         ):
             await self.reply(
                 message,
@@ -1445,7 +1492,15 @@ class Bot(discord.Client):
         else:
             if doc_hint:
                 print(f"[bot] doc requested but reply was short ({len(body)} chars): sent as text", flush=True)
-            await self._send_plan(target, chat_plan(chat, chatty=(cfg.style == "chatty")))
+            traits = persona.load_traits(self.personas_dir, cfg.persona)
+            await self._send_plan(
+                target,
+                chat_plan(
+                    chat,
+                    chatty=(cfg.style == "chatty"),
+                    typing_speed=traits.typing_speed,
+                ),
+            )
 
     async def _send_out_of_budget(self, message):
         try:
@@ -1736,6 +1791,7 @@ class Bot(discord.Client):
             tz=self.config.tz,
             owner_name=self.owner_name,
             user_remaining=ledger.replies_by_user.remaining(interaction.user.id),
+            traits=persona.load_traits(self.personas_dir, cfg.persona),
         )
         header = f"**/dev** {question}\n" if public and question else ("**/dev**\n" if public else "")
 

@@ -161,6 +161,7 @@ class FakeBot:
         self.store = SimpleNamespace(maybe_reload=lambda: None, get=lambda gid: cfg)
         self.calls = []
         self._mentions = mentions
+        self.personas_dir = "/nonexistent"  # no persona.yaml: traits fall back to defaults
         self.channel_activity = bot.ChannelActivity(
             burst_count=burst_count,
             burst_window_seconds=600,

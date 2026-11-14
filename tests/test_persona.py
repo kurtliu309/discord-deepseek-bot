@@ -120,6 +120,134 @@ class TestTypingDelay(unittest.TestCase):
         self.assertEqual(persona.typing_delay("x" * 40), 2.0)
         self.assertEqual(persona.typing_delay("x" * 500), 4.0)
 
+    def test_default_speed_is_unchanged(self):
+        for text in ("", "x", "x" * 40, "x" * 500):
+            self.assertEqual(
+                persona.typing_delay(text, speed=1.0), persona.typing_delay(text)
+            )
+
+    def test_speed_divides_the_delay(self):
+        self.assertEqual(persona.typing_delay("x" * 40, speed=2.0), 1.0)
+        self.assertEqual(persona.typing_delay("x" * 40, speed=0.5), 4.0)
+
+    def test_clamped_to_0_6_and_8_seconds(self):
+        self.assertEqual(persona.typing_delay("", speed=2.0), 0.6)
+        self.assertEqual(persona.typing_delay("x" * 500, speed=0.5), 8.0)
+
+    def test_bad_speed_falls_back_to_1(self):
+        for speed in (0, -2, None, "2", float("nan"), float("inf")):
+            self.assertEqual(persona.typing_delay("x" * 40, speed=speed), 2.0)
+
+
+class TestPersonaTraits(unittest.TestCase):
+    def setUp(self):
+        persona.clear_cache()
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+
+    def tearDown(self):
+        persona.clear_cache()
+        self._tmp.cleanup()
+
+    def _traits(self, text, name="tiredfx"):
+        path = self.root / name / "persona.yaml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        return persona.load_traits(self.root, name)
+
+    def test_missing_file_means_defaults(self):
+        self.assertEqual(persona.load_traits(self.root, "tiredfx"), persona.PersonaTraits())
+
+    def test_defaults_keep_legacy_behaviour(self):
+        traits = persona.load_traits(self.root, "tiredfx")
+        self.assertEqual(traits.chance_scale, 1.0)
+        self.assertIsNone(traits.fx_multiplier)  # None = FX talk gets no bonus
+        self.assertFalse(traits.has_fx_multiplier)
+        self.assertEqual(traits.cooldown_scale, 1.0)
+        self.assertEqual(traits.burst_scale, 1.0)
+        self.assertEqual(traits.typing_speed, 1.0)
+
+    def test_broken_file_means_defaults(self):
+        for text in ("interject: {chance_scale: 1.0", "- just\n- a list\n", "a bare string\n", ""):
+            self.assertEqual(self._traits(text), persona.PersonaTraits(), msg=repr(text))
+
+    def test_wrong_types_mean_defaults(self):
+        traits = self._traits(
+            "interject:\n"
+            "  chance_scale: lots\n"
+            "  fx_multiplier: true\n"
+            "  cooldown_scale: [1]\n"
+            "  burst_scale: many\n"
+            "typing:\n"
+            "  speed: fast\n"
+        )
+        self.assertEqual(traits, persona.PersonaTraits())
+
+    def test_missing_fields_mean_defaults(self):
+        traits = self._traits("interject:\n  chance_scale: 1.5\n")
+        self.assertEqual(traits.chance_scale, 1.5)
+        self.assertIsNone(traits.fx_multiplier)
+        self.assertEqual(traits.cooldown_scale, 1.0)
+        self.assertEqual(traits.typing_speed, 1.0)
+
+    def test_burst_scale(self):
+        traits = self._traits("interject:\n  burst_scale: 1.2\n")
+        self.assertEqual(traits.burst_scale, 1.2)
+        self.assertFalse(traits.has_fx_multiplier)
+        self.assertEqual(self._traits("interject:\n  burst_scale: 0.9\n").burst_scale, 0.9)
+
+    def test_values_are_clamped(self):
+        traits = self._traits(
+            "interject:\n"
+            "  chance_scale: 9\n"
+            "  fx_multiplier: 0.01\n"
+            "  cooldown_scale: -3\n"
+            "  burst_scale: 9\n"
+            "typing:\n"
+            "  speed: 9\n"
+        )
+        self.assertEqual(traits.chance_scale, persona.TRAIT_MAX)
+        self.assertEqual(traits.fx_multiplier, persona.TRAIT_MIN)
+        self.assertEqual(traits.cooldown_scale, persona.TRAIT_MIN)
+        self.assertEqual(traits.burst_scale, persona.BURST_MAX)
+        self.assertEqual(traits.typing_speed, persona.SPEED_MAX)
+        self.assertEqual(
+            self._traits("interject:\n  burst_scale: 0.1\n").burst_scale, persona.BURST_MIN
+        )
+        self.assertEqual(
+            self._traits("typing:\n  speed: 0.1\n").typing_speed, persona.SPEED_MIN
+        )
+
+    def test_non_finite_numbers_mean_defaults(self):
+        traits = self._traits(
+            "interject:\n  chance_scale: .nan\n  fx_multiplier: .inf\n  burst_scale: .nan\n"
+            "typing:\n  speed: -.inf\n"
+        )
+        self.assertEqual(traits, persona.PersonaTraits())
+
+    def test_only_typing_block(self):
+        traits = self._traits("typing:\n  speed: 0.8\n")
+        self.assertEqual(traits.typing_speed, 0.8)
+        self.assertIsNone(traits.fx_multiplier)
+
+    def test_mtime_cache_reloads(self):
+        path = self.root / "tiredfx" / "persona.yaml"
+        self._traits("typing:\n  speed: 0.8\n")
+        self.assertEqual(persona.load_traits(self.root, "tiredfx").typing_speed, 0.8)
+
+        mtime = path.stat().st_mtime_ns
+        path.write_text("typing:\n  speed: 1.5\n", encoding="utf-8")
+        os.utime(path, ns=(mtime + 10 ** 9, mtime + 10 ** 9))
+        self.assertEqual(persona.load_traits(self.root, "tiredfx").typing_speed, 1.5)
+
+    def test_numbers_never_reach_the_prompt(self):
+        self._traits("interject:\n  chance_scale: 1.7\n  fx_multiplier: 2.2\n")
+        (self.root / "tiredfx" / "character.md").write_text("CHAR-ACTER\n", encoding="utf-8")
+        prompt = persona.build_system_prompt(self.root, persona="tiredfx")
+        self.assertIn("CHAR-ACTER", prompt)
+        self.assertNotIn("chance_scale", prompt)
+        self.assertNotIn("2.2", prompt)
+
 
 if __name__ == "__main__":
     unittest.main()

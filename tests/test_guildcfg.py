@@ -33,7 +33,7 @@ class TestDefaults(unittest.TestCase):
         self.assertTrue(cfg.features.chat.on)
         self.assertTrue(cfg.features.interject.on)
         self.assertEqual(cfg.features.interject.chance, 0.03)
-        self.assertEqual(cfg.features.interject.fx_chance, 0.05)
+        self.assertFalse(hasattr(cfg.features.interject, "fx_chance"))
         self.assertEqual(cfg.features.interject.burst_count, 12)
         self.assertEqual(cfg.features.interject.burst_window, 180)
         self.assertEqual(cfg.features.interject.cooldown, 600)
@@ -46,6 +46,42 @@ class TestDefaults(unittest.TestCase):
         self.assertEqual(cfg.features.topics.time, "09:00")
         self.assertEqual(cfg.features.topics.count, 3)
         self.assertTrue(cfg.features.topics.feeds)
+
+
+class TestLegacyFxChance(unittest.TestCase):
+    """v3.6 dropped ``fx_chance``; old config files on disk still carry it."""
+
+    def test_old_fx_chance_in_a_file_still_loads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.yaml"
+            path.write_text(
+                "name: 測試群\n"
+                "features:\n"
+                "  interject:\n"
+                "    chance: 0.07\n"
+                "    fx_chance: 0.09\n"
+                "    burst_count: 9\n"
+                "    burst_window: 120\n"
+                "    cooldown: 300\n",
+                encoding="utf-8",
+            )
+            cfg = g.load_config_file(path)
+        ic = cfg.features.interject
+        self.assertFalse(hasattr(ic, "fx_chance"))
+        self.assertNotIn("fx_chance", g.InterjectSettings.model_fields)
+        # Every other field is untouched.
+        self.assertEqual(ic.chance, 0.07)
+        self.assertEqual(ic.burst_count, 9)
+        self.assertEqual(ic.burst_window, 120)
+        self.assertEqual(ic.cooldown, 300)
+        self.assertTrue(ic.on)
+
+    def test_unknown_keys_are_still_rejected(self):
+        # Only ``fx_chance`` gets the silent drop; a typo must still fail loudly.
+        with self.assertRaises(g.ConfigError):
+            g.parse_config(
+                {"name": "x", "features": {"interject": {"fx_chanc": 0.09}}}
+            )
 
 
 class TestValidation(unittest.TestCase):

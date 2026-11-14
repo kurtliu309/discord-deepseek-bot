@@ -10,6 +10,30 @@ docker-compose.yml, egress/).
 Newest first. Same as the "What's new" box on the guide page. When asked what changed or
 what's new, answer from this list.
 
+- **v3.6 · 2026-11-14**
+  - Personas can now carry their own numbers in
+    `data/shared/personas/<persona>/persona.yaml`: a multiplier on the jump-in chance,
+    a second multiplier for Houdini/FX talk, a multiplier on the cooldown, a multiplier
+    on the burst threshold, and a typing speed. The file is optional: missing, broken or
+    wrong-typed values fall back to the defaults, and the numbers are clamped (the three
+    multipliers to 0.2–3, burst scale to 0.5–3, typing speed to 0.5–2) so a persona can
+    never crash the bot or scale itself into nonsense.
+  - The jump-in chance follows the persona, and the two multipliers work on their own:
+    `chance x chance_scale` always applies (1.0 = unchanged). On Houdini/FX talk only a
+    persona that sets `fx_multiplier` gets a boost, by multiplying the chance by it; a
+    persona without one gets no FX bonus at all. The result is capped at 100%, which no
+    persona file can raise. The cooldown is `cooldown x cooldown_scale`, capped at
+    1 hour.
+  - There is no separate server-level FX probability any more: FX talk is boosted only
+    by the persona's `fx_multiplier`. Old config files that still carry the removed key
+    keep loading fine; it is simply ignored.
+  - The burst trigger follows the persona too: the threshold becomes
+    `burst_count x burst_scale` (never below 1), while the time window stays as the
+    server set it. `>1` means a busier channel is needed before it butts in.
+  - tiredfx is the baseline (1.0 / 1.7 / 1.0 / 1.0 / 1.0, so the same odds as before);
+    turtle is quieter and slower (0.6 / 1.3 / 1.5 / 1.2 / 0.8).
+  - `/rule` now shows the jump-in chances, burst threshold and cooldown that actually
+    apply for the server's persona instead of the raw config numbers.
 - **v3.5 · 2026-11-14**
   - Links with brackets in them now work, e.g. Wikipedia pages like
     `https://en.wikipedia.org/wiki/Houdini_(software)`. Before, the closing `)` was cut off
@@ -141,11 +165,20 @@ what's new, answer from this list.
 ## Jumping in on its own
 
 - Applies in every channel that isn't quiet, to messages from any human.
-- Two triggers: a 3% random chance on each human message (5% when the message is about
-  Houdini/FX), or a burst of more than 12 human messages within 3 minutes in one
-  channel. The numbers are per server; the ones here are the defaults.
-- After it jumps in, that channel has a 10-minute cooldown for jump-ins (mentions still
-  get answered during the cooldown).
+- Two triggers: a random chance on each human message, or a burst of more than 12 human
+  messages within 3 minutes in one channel. The numbers are per server; the default is
+  3% per message.
+- The server's persona scales the chance: `chance x chance_scale` always applies, and
+  on Houdini/FX talk a persona that sets `fx_multiplier` multiplies by it, with a hard
+  cap of 100% that no persona file can raise. A persona with no `fx_multiplier` gets no
+  FX bonus — FX talk uses the same chance as any other message. tiredfx is the baseline
+  (1.0 / 1.7); turtle jumps in less (0.6 / 1.3).
+- The persona can also scale the burst threshold: `burst_count x burst_scale` (never
+  below 1), so turtle needs 1.2x the messages before a burst pulls it in. The 3-minute
+  window stays as the server set it.
+- After it jumps in, that channel has a cooldown for jump-ins (10 minutes by default;
+  the persona's `cooldown_scale` stretches or shortens it, capped at 1 hour). Mentions
+  still get answered during the cooldown.
 - The model sees the last 12 messages numbered and picks which one to reply to, or
   answers SKIP to stay quiet (a skip costs no budget). The jump-in is sent as a Discord
   reply to that message with the reply ping turned off.

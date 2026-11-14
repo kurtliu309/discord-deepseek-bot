@@ -144,10 +144,21 @@ class ChatSettings(FeatureSettings):
 
 class InterjectSettings(FeatureSettings):
     chance: float = Field(0.03, ge=0.0, le=1.0)
-    fx_chance: float = Field(0.05, ge=0.0, le=1.0)
     burst_count: int = Field(12, ge=1)
     burst_window: int = Field(180, ge=1)  # seconds
     cooldown: int = Field(600, ge=0)  # seconds
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_legacy_fx_chance(cls, value):
+        """v3.6 removed ``fx_chance`` (the persona's ``fx_multiplier`` owns it now).
+
+        Existing config files still carry the key and the model forbids extras, so
+        drop it silently here instead of failing to load the whole guild.
+        """
+        if isinstance(value, dict) and "fx_chance" in value:
+            return {k: v for k, v in value.items() if k != "fx_chance"}
+        return value
 
 
 class ReadLinksSettings(FeatureSettings):

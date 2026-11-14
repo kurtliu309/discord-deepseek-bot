@@ -1,8 +1,10 @@
+import tempfile
 import unittest
 from pathlib import Path
 
 import bot
 import guildcfg
+import persona
 
 
 class FakeRNG:
@@ -289,6 +291,164 @@ class TestRulesCard(unittest.TestCase):
         self.assertNotRegex(card, r"\d{15,}")
         self.assertIn("general", card)
         self.assertIn("5/50", card)
+
+
+class TestInterjectChance(unittest.TestCase):
+    def test_no_persona_numbers_means_no_fx_bonus(self):
+        legacy = persona.PersonaTraits()  # no persona.yaml -> fx_multiplier is None
+        self.assertAlmostEqual(bot.interject_chance(0.03, legacy), 0.03)
+        self.assertAlmostEqual(bot.interject_chance(0.03, legacy, True), 0.03)
+        self.assertAlmostEqual(bot.interject_chance(0.10, legacy, True), 0.10)
+        self.assertAlmostEqual(bot.interject_chance(0.03, None), 0.03)
+        self.assertAlmostEqual(bot.interject_chance(0.03, None, True), 0.03)
+
+    def test_fx_multiplier_multiplies_the_base(self):
+        traits = persona.PersonaTraits(fx_multiplier=1.7)
+        self.assertAlmostEqual(bot.interject_chance(0.03, traits), 0.03)
+        self.assertAlmostEqual(bot.interject_chance(0.03, traits, True), 0.051)
+        self.assertAlmostEqual(bot.interject_chance(0.10, traits, True), 0.17)
+
+    def test_chance_scale(self):
+        traits = persona.PersonaTraits(chance_scale=0.6, fx_multiplier=1.3)
+        self.assertAlmostEqual(bot.interject_chance(0.03, traits), 0.018)
+        self.assertAlmostEqual(bot.interject_chance(0.03, traits, True), 0.0234)
+
+    def test_chance_scale_works_without_fx_multiplier(self):
+        # A persona that only sets chance_scale still scales, and FX talk gets
+        # no extra bonus on top of it.
+        traits = persona.PersonaTraits(chance_scale=0.5)
+        self.assertIsNone(traits.fx_multiplier)
+        self.assertAlmostEqual(bot.interject_chance(0.10, traits), 0.05)
+        self.assertAlmostEqual(bot.interject_chance(0.10, traits, True), 0.05)
+        self.assertAlmostEqual(bot.interject_chance(0.02, traits, True), 0.01)
+
+    def test_hard_cap_no_persona_can_raise(self):
+        traits = persona.PersonaTraits(fx_multiplier=1.7)
+        self.assertEqual(bot.INTERJECT_HARD_CAP, 1.0)
+        self.assertEqual(bot.interject_chance(0.9, traits, True), 1.0)  # 0.9 x 1.7
+        self.assertEqual(
+            bot.interject_chance(0.9, persona.PersonaTraits(chance_scale=3.0)),
+            bot.INTERJECT_HARD_CAP,
+        )
+        self.assertEqual(
+            bot.interject_chance(
+                1.0, persona.PersonaTraits(chance_scale=3.0, fx_multiplier=3.0), True
+            ),
+            bot.INTERJECT_HARD_CAP,
+        )
+
+
+class TestInterjectCooldown(unittest.TestCase):
+    def _ic(self, cooldown):
+        return guildcfg.InterjectSettings(cooldown=cooldown)
+
+    def test_scale_multiplies_the_config(self):
+        self.assertEqual(bot.interject_cooldown(self._ic(600), persona.PersonaTraits()), 600)
+        self.assertEqual(
+            bot.interject_cooldown(self._ic(600), persona.PersonaTraits(cooldown_scale=1.5)),
+            900,
+        )
+        self.assertEqual(
+            bot.interject_cooldown(self._ic(600), persona.PersonaTraits(cooldown_scale=0.2)),
+            120,
+        )
+
+    def test_capped_at_one_hour(self):
+        self.assertEqual(bot.MAX_INTERJECT_COOLDOWN, 3600)
+        self.assertEqual(
+            bot.interject_cooldown(self._ic(7200), persona.PersonaTraits(cooldown_scale=3.0)),
+            bot.MAX_INTERJECT_COOLDOWN,
+        )
+
+
+class TestInterjectBurstCount(unittest.TestCase):
+    def _ic(self, burst_count=12):
+        return guildcfg.InterjectSettings(burst_count=burst_count)
+
+    def test_default_is_no_scaling(self):
+        self.assertEqual(bot.interject_burst_count(self._ic(), persona.PersonaTraits()), 12)
+        self.assertEqual(bot.interject_burst_count(self._ic(), None), 12)
+
+    def test_scale_multiplies_the_config(self):
+        self.assertEqual(
+            bot.interject_burst_count(self._ic(), persona.PersonaTraits(burst_scale=1.2)), 14
+        )
+        self.assertEqual(
+            bot.interject_burst_count(self._ic(10), persona.PersonaTraits(burst_scale=0.5)), 5
+        )
+
+    def test_never_below_one(self):
+        self.assertEqual(
+            bot.interject_burst_count(self._ic(1), persona.PersonaTraits(burst_scale=0.5)), 1
+        )
+
+
+class TestRulesCardFollowsPersona(unittest.TestCase):
+    def test_numbers_match_the_trigger_maths(self):
+        cfg = guildcfg.GuildConfig()  # chance 0.03, cooldown 600
+        traits = persona.PersonaTraits(
+            chance_scale=2.0, fx_multiplier=1.7, cooldown_scale=1.5
+        )
+        card = bot.build_rules_card(cfg, traits=traits)
+        chance = bot.interject_chance(cfg.features.interject.chance, traits, False)
+        on_fx = bot.interject_chance(cfg.features.interject.chance, traits, True)
+        cooldown = bot.interject_cooldown(cfg.features.interject, traits)
+        self.assertIn(f"~{chance:.0%} per message", card)
+        self.assertIn(f"~{on_fx:.0%}", card)
+        self.assertIn(f"cool off for {cooldown // 60} min", card)
+        self.assertIn("~6% per message", card)
+        self.assertIn("~10%", card)
+        self.assertIn("15 min", card)
+
+    def test_burst_number_matches_the_trigger_maths(self):
+        cfg = guildcfg.GuildConfig()  # burst_count 12, window 180s
+        traits = persona.PersonaTraits(burst_scale=1.2)
+        card = bot.build_rules_card(cfg, traits=traits)
+        burst = bot.interject_burst_count(cfg.features.interject, traits)
+        self.assertEqual(burst, 14)
+        self.assertIn(f"than {burst} messages in 3 min", card)
+
+    def test_no_fx_multiplier_shows_one_number(self):
+        card = bot.build_rules_card(guildcfg.GuildConfig())
+        self.assertIn("~3% per message", card)
+        self.assertNotIn("Houdini/FX", card)
+        self.assertNotIn("~5%", card)
+        self.assertIn("10 min", card)
+
+    def test_chance_scale_only_still_shows_one_number(self):
+        traits = persona.PersonaTraits(chance_scale=0.6)
+        card = bot.build_rules_card(guildcfg.GuildConfig(), traits=traits)
+        self.assertIn("~2% per message", card)
+        self.assertNotIn("Houdini/FX", card)
+
+    def test_card_reads_the_persona_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "turtle"
+            folder.mkdir()
+            (folder / "persona.yaml").write_text(
+                "interject:\n  chance_scale: 0.6\n  fx_multiplier: 1.3\n"
+                "  cooldown_scale: 1.5\n",
+                encoding="utf-8",
+            )
+            traits = persona.load_traits(tmp, "turtle")
+        try:
+            card = bot.build_rules_card(guildcfg.GuildConfig(persona="turtle"), traits=traits)
+        finally:
+            persona.clear_cache()
+        self.assertIn("~2% per message", card)
+        self.assertIn("15 min", card)
+
+
+class TestChatPlanTypingSpeed(unittest.TestCase):
+    def test_speed_reaches_the_typing_pause(self):
+        body = "first\n[[next]]\n" + "x" * 40
+        plan = bot.chat_plan(body, chatty=True, typing_speed=0.5)
+        self.assertEqual(plan[0], ("reply", "first", 0.0))
+        self.assertEqual(plan[1][2], persona.typing_delay("x" * 40, speed=0.5))
+
+    def test_default_speed_is_unchanged(self):
+        plan = bot.chat_plan("first\n[[next]]\nsecond", chatty=True)
+        self.assertEqual(plan[1][2], persona.typing_delay("second"))
 
 
 if __name__ == "__main__":

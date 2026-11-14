@@ -159,15 +159,16 @@ footer { padding-block: 24px 40px; border-top: 1px solid var(--line); color: var
 <div class="wrap">
   <aside class="news" aria-labelledby="news-title">
     <div class="news-head">
-      <span class="tag">v3.5</span>
+      <span class="tag">v3.6</span>
       <h2 id="news-title"><span class="en">What's new</span><span class="zh">版本更新</span></h2>
       <time datetime="2026-11-14">2026-11-14</time>
     </div>
     <ul>
-      <li><span class="en"><b>Links with brackets work</b>: Wikipedia-style links such as <code>…/wiki/Houdini_(software)</code> are read properly now; before, the closing <code>)</code> was cut off and the page failed. A bracket that only wraps a link, like <code>(see https://example.com)</code>, is still left out.</span><span class="zh"><b>带括号的链接能读了</b>：像 <code>…/wiki/Houdini_(software)</code> 这样的维基链接现在能正常读；以前结尾的 <code>)</code> 会被截掉，读不出页面。只是把链接括起来的括号，比如 <code>(see https://example.com)</code>，照旧不算进链接。</span></li>
+      <li><span class="en"><b>Each persona sets its own pace</b>: a persona can carry a <code>persona.yaml</code> with a multiplier on the jump-in chance, an extra multiplier for Houdini/FX talk, a multiplier on the cooldown, a multiplier on the burst threshold and a typing speed. The chance multiplier and the FX multiplier now work independently — setting only one of them is enough. tiredfx stays the baseline; turtle jumps in less, needs a busier channel to be pulled in by a burst, stays quiet longer and types slower. Missing, broken or out-of-range numbers fall back to safe defaults, and no persona can push the jump-in chance above 100%. There is no separate server-level FX chance any more: FX talk is boosted only by the persona's FX multiplier, and a persona without one gets no FX bonus. Old config files with the removed key still load — it is ignored. <code>/rule</code> now shows the numbers that actually apply.</span><span class="zh"><b>人设有自己的节奏</b>：每个人设可以带一份 <code>persona.yaml</code>，设插话概率倍数、Houdini/FX 话题再加的倍数、冷却倍数、刷屏阈值倍数和打字速度。概率倍数和 FX 倍数现在各自独立——只写其中一个也生效。tiredfx 还是基准；乌龟插话更少、要更热闹才会被刷屏拉出来、冷却更久、打字更慢。数值缺失、写坏或超范围都会回退到安全的默认值，任何人设也不能把插话概率抬过 100%。服务器配置里不再有单独的 FX 话题概率了：FX 话题只靠人设的 FX 倍数加成，没写的人设没有加成。旧配置文件里残留的这个键仍然能正常加载，会被忽略。<code>/rule</code> 显示的是实际生效的数字。</span></li>
     </ul>
     <details>
       <summary><span class="en">Earlier versions</span><span class="zh">更早的版本</span></summary>
+      <p><b>v3.5 · 2026-11-14</b> — <span class="en">Links with brackets work: Wikipedia-style links such as <code>…/wiki/Houdini_(software)</code> are read properly now; a bracket that only wraps a link, like <code>(see https://example.com)</code>, is still left out.</span><span class="zh">带括号的链接能读了：像 <code>…/wiki/Houdini_(software)</code> 这样的维基链接现在能正常读；只是把链接括起来的括号，比如 <code>(see https://example.com)</code>，照旧不算进链接。</span></p>
       <p><b>v3.4 · 2026-11-14</b> — <span class="en">It also reads the links and files in the message you reply to (one level up), and jump-ins read the links in that message too (silently skipping what it can't read).</span><span class="zh">回复某条消息时，那条消息里的链接和附件也会读（只往上一层）；主动插话也读那条消息里的链接，读不到就不吭声。</span></p>
       <p><b>v3.3 · 2026-11-14</b> — <span class="en">Easier <code>/setup</code> pages (Page 1 / Page 2 / Page 3 buttons and the language switch at the bottom of every page); daily news can now be set in <code>/setup</code>.</span><span class="zh"><code>/setup</code> 翻页更直接（每页底部都有「第 1 / 2 / 3 页」和中英切换）；新闻也能在 <code>/setup</code> 里设。</span></p>
       <p><b>v3.2 · 2026-11-14</b> — <span class="en">Daily news: an opening line in character, then one short message per story (title, short summary, one line of comment, link), picked from each server's own interests and never repeated within 30 days.</span><span class="zh">每日新闻：人设开场一句，然后每条新闻一条短消息（标题、简短摘要、一句吐槽、链接），按每个群自己的兴趣挑，30 天内不重样。</span></p>
@@ -214,7 +215,7 @@ footer { padding-block: 24px 40px; border-top: 1px solid var(--line); color: var
           <div class="fact"><div class="n">12 / 3 min</div><div class="l"><span class="en">more than 12 messages in 3 minutes</span><span class="zh">3 分钟内超过 12 条</span></div></div>
           <div class="fact"><div class="n">10 min</div><div class="l"><span class="en">cooldown per channel afterwards</span><span class="zh">之后该频道冷却</span></div></div>
         </div>
-        <p><span class="en">The numbers are per server; the ones above are the defaults. It replies to the one message it most wants to answer, without pinging that person. It may @ someone only when it really matters. It can also decide to stay quiet.</span><span class="zh">这些数字每个群可以自己定，上面是默认值。它会挑一条最想回的消息，以“回复”的形式接上，不给对方发提醒；只有确实必要时才会 @ 人。它也可能决定不说话。</span></p>
+        <p><span class="en">The numbers are per server; the ones above are the defaults. The persona shifts them too: tiredfx is the baseline, turtle jumps in less, needs a busier channel before a burst pulls it in and types slower, and nothing can take the chance above 100%. <code>/rule</code> shows the numbers that actually apply in that server. It replies to the one message it most wants to answer, without pinging that person. It may @ someone only when it really matters. It can also decide to stay quiet.</span><span class="zh">这些数字每个群可以自己定，上面是默认值。人设也会影响它们：tiredfx 是基准，乌龟插话更少、要更热闹才会被刷屏拉出来、打字更慢，而且谁都不能把概率抬过 100%。<code>/rule</code> 显示的是那个群里实际生效的数字。它会挑一条最想回的消息，以“回复”的形式接上，不给对方发提醒；只有确实必要时才会 @ 人。它也可能决定不说话。</span></p>
       </section>
 
       <section>
@@ -455,7 +456,7 @@ docker compose up -d --build</pre>
         </ol>
         <h3><span class="en">Jump-in</span><span class="zh">主动插话</span></h3>
         <ol class="flow">
-          <li><span class="en">Each human message updates a per-channel window; a 3% roll (5% for Houdini/FX talk) or more than 12 messages in 3 minutes triggers, unless the channel is cooling down.</span><span class="zh">每条真人消息更新该频道的时间窗口；3% 随机命中（Houdini/FX 话题 5%），或 3 分钟内超过 12 条就触发，冷却期间除外。</span></li>
+          <li><span class="en">Each human message updates a per-channel window; a 3% roll (scaled by the persona, with an extra FX multiplier only if the persona sets one) or more than 12 messages in 3 minutes triggers, unless the channel is cooling down.</span><span class="zh">每条真人消息更新该频道的时间窗口；3% 随机命中（按人设倍数缩放；Houdini/FX 话题只在人设写了 FX 倍数时才有额外加成），或 3 分钟内超过 12 条就触发，冷却期间除外。</span></li>
           <li><span class="en">The model sees the last 12 messages numbered and answers <code>REPLY_TO: n</code> plus its message, or <code>SKIP</code> (refunded).</span><span class="zh">模型看到编号的最近 12 条消息，回答 <code>REPLY_TO: n</code> 加上它的话，或者回答 <code>SKIP</code>（退回余额）。</span></li>
           <li><span class="en">Sent as a Discord reply to message n with the reply ping switched off; the channel cools down for 10 minutes.</span><span class="zh">以 Discord 回复的形式接在第 n 条下面，关掉回复提醒；该频道冷却 10 分钟。</span></li>
         </ol>

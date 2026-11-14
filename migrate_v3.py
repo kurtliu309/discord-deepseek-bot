@@ -14,7 +14,7 @@ it), existing profile blocks are kept, and recaps already copied are not copied 
 
 Settings read from the environment (non-secret only; the .env file is never opened):
 BLOCKED_CHANNEL_IDS, POST_CHANNEL_ID, SUMMARY_TIME, TOPICS_TIME, TOPICS_COUNT,
-REPLY_BUDGET, BUDGET_RESET_TIME, RANDOM_CHANCE, FX_TOPIC_CHANCE, BURST_COUNT,
+REPLY_BUDGET, BUDGET_RESET_TIME, RANDOM_CHANCE, BURST_COUNT,
 BURST_WINDOW_SECONDS, COOLDOWN_SECONDS.
 
 Usage:
@@ -227,7 +227,6 @@ def build_config(env, guild_name: str, only_channel=None) -> GuildConfig:
         features=Features(
             interject=InterjectSettings(
                 chance=_env_float(env, "RANDOM_CHANCE", 0.03),
-                fx_chance=_env_float(env, "FX_TOPIC_CHANCE", 0.05),
                 burst_count=_env_int(env, "BURST_COUNT", 12),
                 burst_window=_env_int(env, "BURST_WINDOW_SECONDS", 180),
                 cooldown=_env_int(env, "COOLDOWN_SECONDS", 600),

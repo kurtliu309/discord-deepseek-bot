@@ -116,6 +116,9 @@ data\shared\personas\
 └─ _styles\          打字风格，任何人设都能配：chatty.md（短句、分几条发）、normal.md
 ```
 
+- 可选 `persona.yaml`（v3.6）：人设自己的数值，`interject.chance_scale`、`interject.fx_multiplier`、`interject.cooldown_scale`、`interject.burst_scale`、`typing.speed`。缺文件或没写 `interject` 块 = 全部默认（不缩放，FX 话题也没有加成）。数值由代码读、范围夹死（三个倍数 0.2–3，`burst_scale` 0.5–3，打字 0.5–2，插话概率硬上限 100%、冷却上限 1 小时），坏文件不影响运行；内容不进系统提示词。
+- 三个倍数各自独立：`chance_scale` 缺省 1.0、始终乘到基础概率上；`fx_multiplier` 写了才在 FX 话题再乘它，没写则 FX 话题没有加成（和普通消息同概率）。`burst_scale` 只缩放刷屏阈值 `burst_count`（`max(1, round(burst_count × burst_scale))`），不动时间窗口。`/rule` 用同一组函数算，显示的数字和实际触发一致。
+- v3.6 起群配置里没有单独的 FX 话题概率项了：FX 话题的加成完全由人设的 `fx_multiplier` 决定。旧配置里残留的这个键会被静默忽略（配置模型是严格模式，只在 `interject` 这一块单独丢弃它）。
 - 群配置里选：`persona`、`style`、`language`、`nickname`。系统提示拼接顺序：底线 → 人设 → 风格 → 群补充。
 - 只读挂进容器，改了重新加载即可，不用重建镜像。聊天、总结、话题、新闻开场共用同一份人设。
 - 迁移：`prompts/default.txt` 拆成 `_base.md` + `tiredfx/character.md`（底线部分逐条给 Kurt 过目）；乌龟从 `news-pipeline\prompts\reply.md` 搬来，打字节奏从 `news-pipeline\bot.py` 的 `split_turns`/`typing_delay` 搬来做 `chatty`。

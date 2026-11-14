@@ -106,7 +106,7 @@ notepad .env
 | `CONTEXT_MESSAGES` | 回复带多少条上下文（12） |
 | `SCHED_TZ` | 时区，默认 `Australia/Adelaide`（群配置里的时间都用这个时区） |
 
-**v3 起，下面这些都不在 `.env` 里了**，改成按群配置：信任等级、人设 / 风格 / 语言 / 群补充提示词、回复和查询额度及恢复时间、`allowed_channels`、安静频道、插话概率和冷却、`recap` / `topics` 的开关 / 频道 / 时间 / 条数 / 订阅源、隐私确认（`consent`）。在 Discord 里用 `/setup` 改，或直接编辑 `data/guilds/<群ID>/config.yaml`（scheduler 每分钟、bot 每 30 秒自动重载）。旧的 `BLOCKED_CHANNEL_IDS`、`POST_CHANNEL_ID`、`SUMMARY_TIME`、`TOPICS_TIME`、`TOPICS_COUNT`、`REPLY_BUDGET`、`BUDGET_RESET_TIME`、`RANDOM_CHANCE`、`FX_TOPIC_CHANCE`、`BURST_*`、`COOLDOWN_SECONDS`、`SYSTEM_PROMPT`、`RECAP_CONTEXT`、`RECAP_KEEP_DAYS` 都可以删掉了（迁移脚本会读一次，见下文“多群配置 / 测试栈 / 迁移”）。
+**v3 起，下面这些都不在 `.env` 里了**，改成按群配置：信任等级、人设 / 风格 / 语言 / 群补充提示词、回复和查询额度及恢复时间、`allowed_channels`、安静频道、插话概率和冷却、`recap` / `topics` 的开关 / 频道 / 时间 / 条数 / 订阅源、隐私确认（`consent`）。在 Discord 里用 `/setup` 改，或直接编辑 `data/guilds/<群ID>/config.yaml`（scheduler 每分钟、bot 每 30 秒自动重载）。旧的 `BLOCKED_CHANNEL_IDS`、`POST_CHANNEL_ID`、`SUMMARY_TIME`、`TOPICS_TIME`、`TOPICS_COUNT`、`REPLY_BUDGET`、`BUDGET_RESET_TIME`、`RANDOM_CHANCE`、`BURST_*`、`COOLDOWN_SECONDS`、`SYSTEM_PROMPT`、`RECAP_CONTEXT`、`RECAP_KEEP_DAYS` 都可以删掉了（迁移脚本会读一次，见下文“多群配置 / 测试栈 / 迁移”）。
 
 记事本默认保存为 UTF-8，这样没问题。不要存成“UTF-8 with BOM”或 ANSI。
 

@@ -21,7 +21,6 @@ ENV = {
     "REPLY_BUDGET": "42",
     "BUDGET_RESET_TIME": "08:00",
     "RANDOM_CHANCE": "0.07",
-    "FX_TOPIC_CHANCE": "0.09",
     "BURST_COUNT": "9",
     "BURST_WINDOW_SECONDS": "120",
     "COOLDOWN_SECONDS": "300",
@@ -87,7 +86,7 @@ class TestMigration(MigrationCase):
         self.assertIsNone(cfg.allowed_channels)
         self.assertEqual(cfg.quiet_channels, [111, 222])
         self.assertEqual(cfg.features.interject.chance, 0.07)
-        self.assertEqual(cfg.features.interject.fx_chance, 0.09)
+        self.assertNotIn("fx_chance", cfg.features.interject.model_fields)
         self.assertEqual(cfg.features.interject.burst_count, 9)
         self.assertEqual(cfg.features.interject.burst_window, 120)
         self.assertEqual(cfg.features.interject.cooldown, 300)
